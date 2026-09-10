@@ -4,6 +4,8 @@ import { relations } from "drizzle-orm";
 export const users = sqliteTable("clients", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  company_name: text("company_name").default(""),
+  company_id: text("company_id").default(""),
   zip: text("zip").notNull(),
   city: text("city").notNull(),
   street: text("street").notNull(),

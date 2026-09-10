@@ -1,19 +1,29 @@
 import { useState, useEffect } from 'react';
-import { db } from '../db';
-import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { db } from '../db'; 
+import { users } from '../db/schema'; 
+import { 
+  Table, 
+  TableHeader, 
+  TableRow, 
+  TableHeaderCell, 
+  TableBody, 
+  TableCell, 
+  TableCellLayout,
+  Button,
+  Spinner
+} from '@fluentui/react-components';
+import { Delete20Regular } from '@fluentui/react-icons';
 
-import { Button } from '@fluentui/react-components';
-
-// NEU: Nimmt den Trigger aus der App.tsx entgegen
 export function ClientList({ refreshTrigger }: { refreshTrigger: number }) {
   const [clients, setClients] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Daten aus der SQLite-Datenbank laden
   async function loadClients() {
     setIsLoading(true);
     try {
       const result = await db.select().from(users);
-      console.log("Datenbank-Ergebnis:", result); // NEU: Damit sehen wir in F12, was wirklich ankommt!
       setClients(result);
     } catch (error) {
       console.error("Fehler beim Laden:", error);
@@ -22,51 +32,82 @@ export function ClientList({ refreshTrigger }: { refreshTrigger: number }) {
     }
   }
 
-  // GEÄNDERT: react führt loadClients() jetzt jedes Mal aus, wenn sich refreshTrigger ändert
+  // Kunden aus der Datenbank löschen
+  async function handleDelete(id: number, name: string) {
+    const confirmed = window.confirm(`Möchtest du den Kunden "${name}" wirklich löschen?`);
+    if (!confirmed) return;
+
+    try {
+      await db.delete(users).where(eq(users.id, id));
+      await loadClients();
+    } catch (error) {
+      console.error("Fehler beim Löschen:", error);
+      alert("Fehler beim Löschen des Kunden.");
+    }
+  }
+
+  // Wird aufgerufen, wenn die Komponente lädt oder refreshTrigger sich ändert (nach dem Speichern)
   useEffect(() => {
     loadClients();
   }, [refreshTrigger]);
 
-  return (
-    <div className="p-6 m-4 max-w-2xl bg-white border border-gray-200 rounded-lg shadow-sm">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Meine Kunden</h2>
-        
-        {/* Ein manueller Reload-Button, falls du nebenbei neue Kunden anlegst */}
-        <Button
-          onClick={loadClients}
-          className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border transition-colors"
-        >
-          🔄 Aktualisieren
-        </Button>
-      </div>
+  if (isLoading) {
+    return <div className="p-8 flex justify-center"><Spinner label="Lade Datenbank..." /></div>;
+  }
 
-      {isLoading ? (
-        <p className="text-gray-500">Lade Kunden...</p>
-      ) : clients.length === 0 ? (
-        <p className="text-gray-500">Noch keine Kunden in der Datenbank.</p>
-      ) : (
-        <div className="space-y-6 space-x-6" >
-          {clients.map((client) => (
-            <Button
-              key={client.id} 
-              appearance="primary"
-              className="p-4 border rounded hover:bg-gray-50 transition-colors flex justify-between items-center"
-            >
-              <div>
-                <h3 className="font-semibold bg-center text-lg">{client.name}</h3>
-                <p className="text-gray-600 text-sm">
-                  {client.street} {client.number}, {client.zip} {client.city}
-                </p>
+  if (clients.length === 0) {
+    return <p className="text-gray-500 p-4">Noch keine Kunden in der Datenbank vorhanden.</p>;
+  }
+
+  return (
+    // Die Tabelle passt sich automatisch dem verfügbaren Platz an
+    <Table aria-label="Kunden Datenbank Tabelle">
+      <TableHeader>
+        <TableRow>
+          <TableHeaderCell>ID</TableHeaderCell>
+          <TableHeaderCell>Name / Firma</TableHeaderCell>
+          <TableHeaderCell>Adresse</TableHeaderCell>
+          <TableHeaderCell>Kontakt</TableHeaderCell>
+          <TableHeaderCell style={{ width: '80px' }}>Aktionen</TableHeaderCell>
+        </TableRow>
+      </TableHeader>
+
+      <TableBody>
+        {clients.map((client) => (
+          <TableRow key={client.id}>
+            
+            <TableCell>{client.id}</TableCell>
+            
+            <TableCell>
+              {/* TableCellLayout ist super, um Icon und Text zu mischen oder Text fett zu machen */}
+              <TableCellLayout appearance="primary" className="font-semibold">
+                {client.name}
+              </TableCellLayout>
+            </TableCell>
+            
+            <TableCell>
+              {client.street} {client.number}, <br/> {client.zip} {client.city}
+            </TableCell>
+            
+            <TableCell>
+              <div className="flex flex-col">
+                <span className="text-blue-600">{client.phone}</span>
+                <span className="text-sm text-gray-500">{client.email || '-'}</span>
               </div>
-              <div className="text-right text-sm">
-                <span className="block text-blue-600 font-medium">{client.phone}</span>
-                <span className="text-gray-500">ID: {" " + client.id}</span>
-              </div>
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
+            </TableCell>
+            
+            <TableCell>
+              <Button 
+                appearance="subtle" 
+                icon={<Delete20Regular className="text-red-500" />} 
+                onClick={() => handleDelete(client.id, client.name)}
+                title="Löschen"
+              />
+            </TableCell>
+
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

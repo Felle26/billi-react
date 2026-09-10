@@ -1,29 +1,20 @@
-import { useState } from 'react';
-import type { ComponentType } from 'react';
-import { AddClientTest } from './components/AddClientTest';
-import { ClientList } from './components/ClientList';
-
-const ClientForm = AddClientTest as unknown as ComponentType<{
-  onClientAdded: () => void;
-}>;
-
-const ClientListComponent = ClientList as unknown as ComponentType<{
-  refreshTrigger: number;
-}>;
+import { Routes, Route } from 'react-router-dom';
+import Customers from './pages/customers';
+import CustomerObjects from './pages/customer_objects';
+import Invoice from './pages/invoice';
+import Dashboard from './pages/dashboard';
+import Settings from './pages/settings';
 
 export default function App() {
-  // Eine einfache Zahl, die wir hochzählen, um ein Neuladen zu erzwingen
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-
   return (
-    <div className="min-h-screen bg-gray-50 p-8 flex flex-col items-center">
-      <div className="w-full max-w-2xl">
-        {/* Wir geben der Komponente eine Funktion mit, die aufgerufen wird, wenn gespeichert wurde */}
-        <ClientForm onClientAdded={() => setRefreshTrigger(prev => prev + 1)} />
-        
-        {/* Wir geben der Liste den aktuellen Trigger-Wert mit */}
-        <ClientListComponent refreshTrigger={refreshTrigger} />
-      </div>
-    </div>
+    <Routes>
+      <Route path="/customers" element={<Customers />} />
+      <Route path="/customer_objects" element={<CustomerObjects />} />
+      <Route path="/invoice" element={<Invoice />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/settings" element={<Settings />} />
+
+      <Route path="/" element={<Dashboard />} />
+    </Routes>
   );
 }
