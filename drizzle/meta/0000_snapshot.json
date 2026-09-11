@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "cc6d1ed2-785c-45c5-a091-da17ed4f06a3",
+  "id": "8330b27b-2ad8-4b08-b355-d826e8bb3ed8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "invoice_items": {
@@ -121,6 +121,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "invoice_path": {
+          "name": "invoice_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -179,6 +186,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "planned_route_Id": {
+          "name": "planned_route_Id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
@@ -246,6 +268,19 @@
       },
       "indexes": {},
       "foreignKeys": {
+        "Object_planned_route_Id_planned_routes_id_fk": {
+          "name": "Object_planned_route_Id_planned_routes_id_fk",
+          "tableFrom": "Object",
+          "tableTo": "planned_routes",
+          "columnsFrom": [
+            "planned_route_Id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "Object_user_id_clients_id_fk": {
           "name": "Object_user_id_clients_id_fk",
           "tableFrom": "Object",
@@ -260,6 +295,30 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "planned_routes": {
+      "name": "planned_routes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "route_name": {
+          "name": "route_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -319,12 +378,37 @@
           "notNull": true,
           "autoincrement": true
         },
-        "name": {
-          "name": "name",
+        "first_name": {
+          "name": "first_name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": false,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "company_name": {
+          "name": "company_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "''"
         },
         "zip": {
           "name": "zip",

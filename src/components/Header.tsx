@@ -7,7 +7,7 @@ import {
   BookDatabase20Regular, 
   Settings20Regular, 
   People20Regular, 
-  Apps20Regular 
+  Map20Regular 
 } from '@fluentui/react-icons';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,12 +41,19 @@ export function Header() {
           
           <Button 
             appearance="transparent" 
-            icon={<Apps20Regular />} 
+            icon={<People20Regular />} 
             onClick={() => navigate('/customer_objects')}
           >
             Objekte
           </Button>
-          
+
+          <Button 
+            appearance="transparent" 
+            icon={<Map20Regular />} 
+            onClick={() => navigate('/customer_routes')}
+          >
+            Touren
+          </Button>
           <Button 
             appearance="transparent" 
             icon={<BookDatabase20Regular />} 

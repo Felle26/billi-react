@@ -15,6 +15,7 @@ CREATE TABLE `invoices` (
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`deleted_at` integer,
+	`invoice_path` text NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `clients`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`object_id`) REFERENCES `Object`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -23,6 +24,8 @@ CREATE TABLE `Object` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
+	`planned_route_Id` integer NOT NULL,
+	`sort_order` integer DEFAULT 0,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`deleted_at` integer,
@@ -32,7 +35,13 @@ CREATE TABLE `Object` (
 	`zip` text NOT NULL,
 	`city` text NOT NULL,
 	`country` text NOT NULL,
+	FOREIGN KEY (`planned_route_Id`) REFERENCES `planned_routes`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`user_id`) REFERENCES `clients`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `planned_routes` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`route_name` text NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `products` (
@@ -45,7 +54,10 @@ CREATE TABLE `products` (
 --> statement-breakpoint
 CREATE TABLE `clients` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`name` text NOT NULL,
+	`first_name` text DEFAULT '',
+	`last_name` text DEFAULT '',
+	`company_name` text DEFAULT '',
+	`company_id` text DEFAULT '',
 	`zip` text NOT NULL,
 	`city` text NOT NULL,
 	`street` text NOT NULL,

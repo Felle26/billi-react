@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Field, Input, Button } from '@fluentui/react-components';
 import { Save20Regular, Dismiss20Regular } from '@fluentui/react-icons';
+import { message } from '@tauri-apps/plugin-dialog';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 interface CustomerFormProps {
   onClientAdded: () => void;
   onCancel: () => void;
+  clientToEdit?: any;
 }
 
-export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
-  // States für die Eingabefelder
+export function CustomerForm({ onClientAdded, onCancel, clientToEdit }: CustomerFormProps) {
   const [company, setCompany] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -20,27 +24,62 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
   const [phone, setPhone] = useState('');
   const [customer_id, setCustomerId] = useState('');
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault(); // Verhindert, dass die Seite neu lädt
+  useEffect(() => {
+    if (clientToEdit) {
+      setCompany(clientToEdit.company_name || '');
+      setFirstName(clientToEdit.first_name || '');
+      setLastName(clientToEdit.last_name || '');
+      setEmail(clientToEdit.email || '');
+      setStreet(clientToEdit.street || '');
+      setCity(clientToEdit.city || '');
+      setHouseNumber(clientToEdit.number || '');
+      setPostalCode(clientToEdit.zip || '');
+      setPhone(clientToEdit.phone || '');
+      setCustomerId(clientToEdit.company_id || '');
+    }
+  }, [clientToEdit]);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     
-    // Hier kommt später dein Tauri/Rust-Code hin, um die Daten in der SQLite-Datenbank zu speichern!
-    console.log("Neuer Kunde gespeichert:", { company, firstName, lastName, email, street, city, houseNumber, postalCode, phone, customer_id });
-    
-    // Felder nach dem Speichern leeren
-    setCompany(''); setFirstName(''); setLastName(''); setEmail(''); setStreet(''); setCity(''); setHouseNumber(''); setPostalCode(''); setPhone(''); setCustomerId('');
-    
-    
-    // Die Liste benachrichtigen, dass sie sich neu laden soll
-    onClientAdded();
+    try {
+      const customerData = {
+        company_name: company || "",
+        first_name: firstName,
+        last_name: lastName,
+        street: street || "Unbekannt",
+        number: houseNumber || "1", 
+        zip: postalCode || "00000", 
+        city: city || "Unbekannt",
+        phone: phone || "Keine Angabe", 
+        email: email,
+        company_id: customer_id || "",
+        updated_at: new Date()
+      };
+
+      if (clientToEdit) {
+        // UPDATE: Aktualisiert den bestehenden Datensatz in SQLite
+        await db.update(users)
+                .set(customerData)
+                .where(eq(users.id, clientToEdit.id));
+      } else {
+        // INSERT: Legt einen neuen Kunden an
+        await db.insert(users).values(customerData);
+      }
+
+      setCompany(''); setFirstName(''); setLastName(''); setEmail(''); setStreet(''); setCity(''); setHouseNumber(''); setPostalCode(''); setPhone(''); setCustomerId('');
+      onClientAdded();
+      onCancel(); 
+    } catch (error) {
+      console.error("Fehler beim Speichern:", error);
+      await message("Kunde konnte nicht gespeichert werden.", { title: 'Fehler', kind: 'error' });
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      
-      {/* 2-Spalten-Grid für die Felder (auf Handys 1 Spalte, ab 'md' 2 Spalten) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
-        {/* Firma nimmt die volle Breite ein (col-span-2) */}
         <div className="md:col-span-2">
           <Field label="Firmenname (optional)">
             <Input 
@@ -50,6 +89,7 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
             />
           </Field>
         </div>
+        
         <div className="md:col-span-2">
           <Field label="Kundennummer (optional)">
             <Input 
@@ -76,16 +116,17 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
           />
         </Field>
 
-          <Field label="E-Mail Adresse" required>
-            <Input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              placeholder="mail@beispiel.de" 
-              required
-            />
-          </Field>
-          <Field label="Telefonnummer">
+        <Field label="E-Mail Adresse" required>
+          <Input 
+            type="email" 
+            value={email} 
+            onChange={(e) => setEmail(e.target.value)} 
+            placeholder="mail@beispiel.de" 
+            required
+          />
+        </Field>
+        
+        <Field label="Telefonnummer">
           <Input
             type="tel" 
             value={phone} 
@@ -93,7 +134,6 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
             placeholder="Telefonnummer" 
           />
         </Field>
-       
 
         <Field label="Straße" required>
           <Input 
@@ -103,6 +143,7 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
             required
           />
         </Field>
+        
         <Field label="Hausnummer" required>
           <Input 
             value={houseNumber} 
@@ -121,8 +162,6 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
           />
         </Field>
 
-        
-          
         <Field label="Ort" required>
           <Input 
             value={city} 
@@ -131,13 +170,11 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
             required
           />
         </Field>
-        
 
       </div>
 
-      {/* Speichern Button - rechtsbündig */}
       <div className="flex justify-between mt-2">
-          <Button 
+        <Button 
           type="button" 
           appearance="secondary"
           icon={<Dismiss20Regular />}
@@ -145,14 +182,9 @@ export function CustomerForm({ onClientAdded, onCancel }: CustomerFormProps) {
         >
           Abbrechen
         </Button>
-        <Button 
-          type="submit" 
-          appearance="primary" 
-          icon={<Save20Regular />}
-        >
-          Kunden anlegen
+        <Button type="submit" appearance="primary" icon={<Save20Regular />}>
+          {clientToEdit ? 'Änderungen speichern' : 'Kunden anlegen'}
         </Button>
-
       </div>
       
     </form>

@@ -22,8 +22,8 @@ export const AppThemeProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('app-theme', isDarkMode ? 'dark' : 'light');
     
     // Optional: Hintergrund des body-Tags global setzen
-    document.body.style.backgroundColor = isDarkMode ? '#242424' : '#ffffff';
-    document.body.style.color = isDarkMode ? '#ffffff' : '#242424';
+     document.documentElement.dataset.theme = isDarkMode ? 'dark' : 'light';
+    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
 
   const toggleTheme = () => setIsDarkMode((prev) => !prev);

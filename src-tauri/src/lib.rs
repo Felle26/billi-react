@@ -12,10 +12,10 @@ pub fn run() {
         Migration {
             version: 1,
             description: "create_initial_tables",
-            sql: include_str!("../../drizzle/0000_perfect_scarlet_spider.sql"),
+            sql: include_str!("../../drizzle/0000_tan_darkstar.sql"),
             kind: MigrationKind::Up,
         }
-    ];
+    ]; 
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

@@ -3,7 +3,8 @@ import { relations } from "drizzle-orm";
 
 export const users = sqliteTable("clients", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
+  first_name: text("first_name").default(""),
+  last_name: text("last_name").default(""),
   company_name: text("company_name").default(""),
   company_id: text("company_id").default(""),
   zip: text("zip").notNull(),
@@ -15,7 +16,7 @@ export const users = sqliteTable("clients", {
   fax: text("fax").default(""),
   website: text("website").default(""),
   created_at: integer("created_at", { mode: "timestamp" })
-    .notNull()
+    .notNull() 
     .$defaultFn(() => new Date()),
   updated_at: integer("updated_at", { mode: "timestamp" })
     .notNull()
@@ -34,6 +35,10 @@ export const objects = sqliteTable("Object", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
+  planned_route_Id: integer("planned_route_Id")
+    .notNull()
+    .references(() => planned_routes.id),
+  sort_order: integer("sort_order").default(0),
   created_at: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -51,12 +56,15 @@ export const objects = sqliteTable("Object", {
   country: text("country").notNull(),
 });
 
-export const objectsRelations = relations(objects, ({ one, many }) => ({
+export const objectsRelations = relations(objects, ({ one }) => ({
   user: one(users, {
     fields: [objects.user_id],
     references: [users.id],
   }), // Ein Objekt gehört zu genau einem Kunden
-  invoices: many(invoices), // Für ein Objekt kann es viele Rechnungen geben
+  planned_route: one(planned_routes, {
+    fields: [objects.planned_route_Id],
+    references: [planned_routes.id],
+  }), // Ein Objekt gehört zu genau einer geplanten Route
 }));
 
 export const products = sqliteTable("products", {
@@ -86,6 +94,7 @@ export const invoices = sqliteTable("invoices", {
     .notNull()
     .$defaultFn(() => new Date()),
   deleted_at: integer("deleted_at", { mode: "timestamp" }),
+  invoice_path: text("invoice_path").notNull()
 });
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
@@ -122,4 +131,14 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
     fields: [invoiceItems.product_id],
     references: [products.id],
   }), // Die Position referenziert ein Produkt
+}));
+
+export const planned_routes = sqliteTable("planned_routes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  route_name: text("route_name")
+    .notNull(),
+});
+
+export const planned_routesRelations = relations(planned_routes, ({ many }) => ({
+  objects: many(objects), // Eine geplante Route kann viele Objekte enthalten
 }));

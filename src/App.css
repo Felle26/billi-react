@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -15,20 +17,36 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafb);
 }
+
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 20px;
   line-height: 24px;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  --app-background: #f6f6f6;
+  --app-foreground: #0f0f0f;
+  background-color: var(--app-background);
+  color: var(--app-foreground);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme='dark'],
+.dark {
+  --app-background: #111827;
+  --app-foreground: #f9fafb;
+}
+
+body {
+  background-color: var(--app-background);
+  color: var(--app-foreground);
+  min-height: 100vh;
+  margin: 0;
 }
 
 .container {
@@ -108,7 +126,6 @@ button {
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
-    background-color: #2f2f2f;
   }
 
   a:hover {
@@ -127,4 +144,7 @@ button {
 html, body, #root {
   width: 100%;
   margin: 0;
+  min-height: 100%;
+  background-color: var(--app-background);
+  color: var(--app-foreground);
 }
