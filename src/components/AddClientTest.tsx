@@ -11,7 +11,9 @@ export function AddClientTest({ onClientAdded }: { onClientAdded: () => void }) 
     setStatus('Speichere...');
     try {
       await db.insert(users).values({
-        name: 'Glanz & Sauber Gebäudereinigung',
+        company_name: 'Glanz & Sauber Gebäudereinigung',
+        first_name: '',
+        last_name: '',
         street: 'Wilsdruffer Str.',
         number: '12a',
         zip: '01705',

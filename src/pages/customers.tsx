@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CustomerForm } from '../components/customerForm';
+import { CustomerForm } from '../components/CustomerForm';
 import { ClientList } from '../components/ClientList';
 import { 
   Button, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent 
