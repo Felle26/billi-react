@@ -24,7 +24,7 @@ CREATE TABLE `Object` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
-	`planned_route_Id` integer NOT NULL,
+	`planned_route_Id` integer,
 	`sort_order` integer DEFAULT 0,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,

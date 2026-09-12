@@ -12,7 +12,7 @@ pub fn run() {
         Migration {
             version: 1,
             description: "create_initial_tables",
-            sql: include_str!("../../drizzle/0000_tan_darkstar.sql"),
+            sql: include_str!("../../drizzle/0000_superb_doctor_doom.sql"),
             kind: MigrationKind::Up,
         }
     ]; 

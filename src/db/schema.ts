@@ -36,7 +36,6 @@ export const objects = sqliteTable("Object", {
   name: text("name").notNull(),
   description: text("description"),
   planned_route_Id: integer("planned_route_Id")
-    .notNull()
     .references(() => planned_routes.id),
   sort_order: integer("sort_order").default(0),
   created_at: integer("created_at", { mode: "timestamp" })
