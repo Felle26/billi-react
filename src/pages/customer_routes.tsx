@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner } from '@fluentui/react-components';
 import { Building20Regular, Map20Regular, SubtractCircle20Regular, Add20Regular, Edit20Regular, Delete20Regular } from '@fluentui/react-icons';
 import { RouteForm } from '../components/RouteForm';
+import './../App.css'
 
 function DraggableObjectCard({ object, onClickUnassign }: { object: any; onClickUnassign?: (objectId: number) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -31,8 +32,9 @@ function DraggableObjectCard({ object, onClickUnassign }: { object: any; onClick
       {...listeners}
       {...attributes}
       className={[
-        'p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-400 transition-colors',
+        'p-3 scroll-animation bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-400 transition-colors',
         isDragging ? 'opacity-30 border-dashed border-blue-400' : '',
+        'no-scrollbar',
       ].join(' ')}
     >
       <div className="font-semibold text-sm flex items-center gap-2">
@@ -78,7 +80,7 @@ function SortableObjectItem({ object, index, onUnassign, isActiveDrag }: { objec
         {...attributes}
         {...listeners}
         className={[
-          'p-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-sm shadow-sm cursor-grab active:cursor-grabbing transition-all',
+          'p-2 scroll-animation bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-sm shadow-sm cursor-grab active:cursor-grabbing transition-all',
           isDragging ? 'opacity-50 scale-[0.98] ring-2 ring-blue-300 dark:ring-blue-500' : '',
           isOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 shadow-md' : '',
           isActiveDrag ? 'ring-2 ring-blue-200 dark:ring-blue-600' : '',
@@ -143,7 +145,7 @@ function RouteDropZone({
     <div
       ref={setNodeRef}
       className={[
-        'min-h-50 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed p-4 flex flex-col transition-all duration-200 shadow-sm',
+        'min-h-50 scroll-animation bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed p-4 flex flex-col transition-all duration-200 shadow-sm',
         isOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/25 ring-4 ring-blue-200 dark:ring-blue-800 shadow-[0_0_0_4px_rgba(96,165,250,0.18)] animate-pulse' : 'border-gray-300 dark:border-gray-600',
       ].join(' ')}
     >
@@ -178,7 +180,7 @@ function RouteDropZone({
         </div>
       </div>
 
-      <div className="grow space-y-2">
+      <div className="grow space-y-2 overflow-y-auto max-h-72 pr-1 no-scrollbar">
         {orderedRouteObjects.length === 0 ? (
           <p className="text-xs text-gray-400 italic text-center mt-2">Tour ist leer</p>
         ) : (
@@ -576,19 +578,19 @@ export default function RoutePlanner() {
         </div>
       ) : (
         <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragId(null)}>
-          <div className="grow grid grid-cols-1 lg:grid-cols-4 gap-6 overflow-hidden">
+          <div className="grow grid grid-cols-1 lg:grid-cols-4 gap-6 overflow-hidden min-h-0">
             <div
               ref={setUnassignedRef}
               className={[
-                'lg:col-span-1 relative z-10 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-col h-full transition-all duration-200',
+                'lg:col-span-1 relative z-10 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-col h-full min-h-0 transition-all duration-200',
                 isUnassignedOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20 animate-pulse' : '',
               ].join(' ')}
             >
-              <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700 shrink-0">
                 Unzugewiesen ({unassignedObjects.length})
               </h3>
 
-              <div className="grow overflow-y-auto space-y-3 pr-2 no-scrollbar">
+              <div className="grow min-h-0 overflow-y-auto space-y-3 pr-2 no-scrollbar">
                 {unassignedObjects.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center mt-4">Alle Objekte sind zugewiesen!</p>
                 ) : (
@@ -599,38 +601,40 @@ export default function RoutePlanner() {
               </div>
             </div>
 
-            <div className="lg:col-span-3 relative z-0 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col h-full">
-              <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4">
+            <div className="lg:col-span-3 relative z-0 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col h-full min-h-0">
+              <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 shrink-0">
                 Geplante Touren ({routes.length})
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 no-scrollbar">
-                {routes.length === 0 ? (
-                  <p className="text-gray-500 col-span-full">Noch keine Touren angelegt. Lege zuerst eine Tour an.</p>
-                ) : (
-                  routes.map(route => {
-                    const routeObjects = allObjects.filter(o => o.planned_route_Id === route.id);
-                    const isEmptyRoute = routeObjects.length === 0;
+              <div className="grow min-h-0 overflow-y-auto pr-2 no-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-2">
+                  {routes.length === 0 ? (
+                    <p className="text-gray-500 col-span-full">Noch keine Touren angelegt. Lege zuerst eine Tour an.</p>
+                  ) : (
+                    routes.map(route => {
+                      const routeObjects = allObjects.filter(o => o.planned_route_Id === route.id);
+                      const isEmptyRoute = routeObjects.length === 0;
 
-                    return (
-                      <div key={route.id} className={isEmptyRoute ? 'opacity-70' : ''}>
-                        <RouteDropZone
-                          route={route}
-                          routeObjects={routeObjects}
-                          onUnassignObject={confirmUnassignObject}
-                          activeDragId={activeDragId}
-                          onRemoveRoute={confirmDeleteRoute}
-                          onEditRoute={openEditRouteModal}
-                        />
-                        {isEmptyRoute && (
-                          <div className="mt-2 rounded border border-dashed border-gray-300 bg-gray-50 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                            Nicht zugewiesen
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                      return (
+                        <div key={route.id} className={isEmptyRoute ? 'opacity-70' : ''}>
+                          <RouteDropZone
+                            route={route}
+                            routeObjects={routeObjects}
+                            onUnassignObject={confirmUnassignObject}
+                            activeDragId={activeDragId}
+                            onRemoveRoute={confirmDeleteRoute}
+                            onEditRoute={openEditRouteModal}
+                          />
+                          {isEmptyRoute && (
+                            <div className="mt-2 rounded border border-dashed border-gray-300 bg-gray-50 px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                              Nicht zugewiesen
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -57,6 +57,13 @@ export function Header() {
           <Button 
             appearance="transparent" 
             icon={<BookDatabase20Regular />} 
+            onClick={() => navigate('/products')}
+          >
+            Produkte
+          </Button>
+          <Button 
+            appearance="transparent" 
+            icon={<BookDatabase20Regular />} 
             onClick={() => navigate('/invoice')}
           >
             Rechnungen

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/*noinspection CssUnknownAtRule*/
 @custom-variant dark (&:where(.dark, .dark *));
 
 .no-scrollbar::-webkit-scrollbar {
@@ -10,12 +11,20 @@
   scrollbar-width: none;     /* Firefox */
 }
 
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+@keyframes card-appear {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
+.scroll-animation {
+  animation: card-appear linear both;
+  animation-timeline: view(block 80% 0%);
 }
 
 :root {

@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "billi-react",
+        "title": "Billi, der Rechnungsprofi",
         "width": 800,
         "height": 600,
         "maximized": true

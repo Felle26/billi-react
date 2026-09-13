@@ -426,7 +426,7 @@ export default function Dashboard() {
                     <tr
                       key={inv.id}
                       onClick={() => setSelectedInvoice(inv)}
-                      className="hover:bg-blue-50/50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                      className="scroll-animation hover:bg-blue-50/50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
                     >
                       <td className="py-3 px-3 font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                         <span>{inv.number}</span>

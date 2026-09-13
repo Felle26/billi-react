@@ -72,10 +72,37 @@ export const products = sqliteTable("products", {
   description: text("description"),
   price: real("price").notNull(),
   price_tag: text("price_tag").notNull(),
+  product_unit: text("product_unit").default("lfm"),
+  product_count: real("product_count").default(0),
 });
 
 export const productsRelations = relations(products, ({ many }) => ({
   invoiceItems: many(invoiceItems), // Ein Produkt kann auf vielen Rechnungen stehen
+  customerProducts: many(customerProducts),
+}));
+
+export const customerProducts = sqliteTable("customer_products", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  user_id: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  product_id: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  custom_price: real("custom_price").notNull(),
+  custom_quantity: real("custom_quantity").notNull().default(0),
+  sort_order: integer("sort_order").default(0),
+});
+
+export const customerProductsRelations = relations(customerProducts, ({ one }) => ({
+  customer: one(users, {
+    fields: [customerProducts.user_id],
+    references: [users.id],
+  }),
+  product: one(products, {
+    fields: [customerProducts.product_id],
+    references: [products.id],
+  }),
 }));
 
 export const invoices = sqliteTable("invoices", {

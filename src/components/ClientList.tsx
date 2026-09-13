@@ -96,7 +96,7 @@ export function ClientList({ refreshTrigger, onEditClient }: ClientListProps) {
               filteredClients.map((client) => {
                 const fullName = `${client.first_name} ${client.last_name}`.trim();
                 return (
-                <TableRow key={client.company_id}>
+                <TableRow key={client.company_id} className="scroll-animation">
                   <TableCell>{client.company_id}</TableCell>
                   <TableCell>
                     <TableCellLayout appearance="primary" className="font-semibold">

@@ -14,7 +14,25 @@ pub fn run() {
             description: "create_initial_tables",
             sql: include_str!("../../drizzle/0000_superb_doctor_doom.sql"),
             kind: MigrationKind::Up,
-        }
+        },
+        Migration {
+            version: 2,
+            description: "create_customer_products",
+            sql: include_str!("../../drizzle/0001_create_customer_products.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "add_product_units",
+            sql: include_str!("../../drizzle/0002_add_product_units.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "add_customer_product_quantity",
+            sql: include_str!("../../drizzle/0003_add_customer_product_quantity.sql"),
+            kind: MigrationKind::Up,
+        },
     ]; 
 
     tauri::Builder::default()
