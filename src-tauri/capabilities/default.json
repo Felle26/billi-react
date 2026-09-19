@@ -11,7 +11,16 @@
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "sql:allow-close"
-    
+    "sql:allow-close",
+    "shell:allow-execute",
+    "shell:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow":[{ 
+        "name": "bin/zugferd",
+        "sidecar": true,
+        "args": true
+      }]
+    }
   ]
 }
