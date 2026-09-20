@@ -71,7 +71,7 @@ function DraggableProduct({ product, customPrice, customQuantity }: { product: P
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`relative cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all hover:border-blue-400 active:cursor-grabbing dark:border-gray-700 dark:bg-gray-800 ${isDragging ? 'opacity-30' : ''}`}
+      className={`relative h-24 cursor-grab overflow-hidden rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all hover:border-blue-400 active:cursor-grabbing dark:border-gray-700 dark:bg-gray-800 ${isDragging ? 'opacity-30' : ''}`}
     >
       <ProductCardContent product={product} customPrice={customPrice} customQuantity={customQuantity} />
     </div>
@@ -125,6 +125,7 @@ export default function InvoicePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const [showCustomerProducts, setShowCustomerProducts] = useState(true);
 
   // Grunddaten beim Start laden (Kunden & Produkte)
   useEffect(() => {
@@ -209,10 +210,15 @@ export default function InvoicePage() {
     setSelectedUserId(userId);
     setSelectedObjectId('');
     setObjectList([]);
+    setCustomerPricing({});
   }
 
-  // Alle wählbaren Produkte inkl. der immer verfügbaren Blanko-Position
-  const allProducts = [BLANK_PRODUCT, ...productList];
+  // Zwischen Kundenprodukten und der vollständigen Produktstammliste umschaltbar.
+  const customerProductsList = selectedUserId
+    ? productList.filter((product) => customerPricing[product.id])
+    : [];
+  const visibleProducts = showCustomerProducts ? customerProductsList : productList;
+  const allProducts = [BLANK_PRODUCT, ...visibleProducts];
 
   // 3. Position zur Rechnung hinzufügen
   const handleAddProduct = (productId: string) => {
@@ -349,24 +355,22 @@ export default function InvoicePage() {
 
   return (
     <DndContext onDragStart={handleProductDragStart} onDragEnd={handleProductDrop}>
-      <div className="flex h-[calc(100vh-140px)] flex-col items-center">
-        <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-4 pb-2">
+      <div className="flex min-h-0 flex-1 flex-col items-center overflow-hidden">
+        <div className="flex min-h-0 w-full max-w-full flex-1 flex-col gap-2 overflow-hidden">
 
-        {/* HEADER */}
-        <div className="flex items-center justify-between gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 shrink-0">
-           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Neue Rechnung erstellen</h2>
-           <Input 
-             value={invoiceId} 
-             autoComplete="off"
-             onChange={(e) => setInvoiceId(e.target.value)} 
-             placeholder="Rechnungsnummer" 
-             className="w-44"
-           />
-        </div>
-
-        {/* AUSWAHL: KUNDE & OBJEKT */}
-        <div className="grid grid-cols-1 gap-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 shrink-0 md:grid-cols-3">
-          <div className="flex flex-col gap-4">
+        {/* RECHNUNG: TITEL, KUNDE & OBJEKT */}
+        <div className="grid grid-cols-1 gap-2 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 shrink-0 md:grid-cols-3">
+          <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-3 dark:border-gray-700 md:col-span-3">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Neue Rechnung erstellen</h2>
+            <Input
+              value={invoiceId}
+              autoComplete="off"
+              onChange={(e) => setInvoiceId(e.target.value)}
+              placeholder="Rechnungsnummer"
+              className="w-44"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
             <Field label="Kunde auswählen" required>
               <Combobox 
                 placeholder="Kunde wählen..."
@@ -401,7 +405,7 @@ export default function InvoicePage() {
             </Field>
           </div>
 
-          <div className="flex flex-col gap-2 justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+          <div className="flex flex-col justify-center gap-2 text-sm text-gray-700 dark:text-gray-200">
             <span>Nettobetrag: <strong>{netTotal.toFixed(2)} €</strong></span>
             <span>19% MwSt.: <strong>{vatTotal.toFixed(2)} €</strong></span>
             <span>Gesamtbetrag: <strong>{grossTotal.toFixed(2)} €</strong></span>
@@ -436,10 +440,28 @@ export default function InvoicePage() {
         </div>
 
         {/* POSITIONEN HINZUFÜGEN */}
-        <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[460px_minmax(0,1fr)]">
-            <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 xl:grid-cols-[460px_minmax(0,1fr)]">
+            <aside className="flex min-h-0 flex-col gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900">
               <h3 className="font-semibold text-gray-800 dark:text-gray-200 shrink-0">Produkte</h3>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="small"
+                  appearance={showCustomerProducts ? 'primary' : 'secondary'}
+                  onClick={() => setShowCustomerProducts(true)}
+                  aria-pressed={showCustomerProducts}
+                >
+                  Kunde
+                </Button>
+                <Button
+                  size="small"
+                  appearance={showCustomerProducts ? 'secondary' : 'primary'}
+                  onClick={() => setShowCustomerProducts(false)}
+                  aria-pressed={!showCustomerProducts}
+                >
+                  Standard
+                </Button>
+              </div>
               <p className="text-xs text-gray-500 shrink-0">Produkt auf die Rechnung ziehen</p>
               <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto no-scrollbar pr-1">
                 {allProducts.map(product => {
@@ -456,8 +478,8 @@ export default function InvoicePage() {
               </div>
             </aside>
 
-            <div className="flex min-h-0 min-w-0 flex-col gap-4">
-              <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-h-0 min-w-0 flex-col gap-2">
+              <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="font-semibold text-gray-800 dark:text-gray-200">Rechnungspositionen</h3>
                 <Combobox 
                   placeholder="+ Produkt/Leistung hinzufügen..."

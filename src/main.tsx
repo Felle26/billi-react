@@ -12,10 +12,10 @@ import "./App.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <AppThemeProvider>
-      <div className="w-full min-h-screen flex flex-col">
+      <div className="flex h-screen w-full flex-col overflow-hidden">
       <HashRouter>
           <Header />
-          <div className="grow">
+          <div className="flex min-h-0 grow flex-col overflow-hidden">
           <App />
         </div>
         <Footer />
