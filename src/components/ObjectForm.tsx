@@ -152,7 +152,7 @@ export function ObjectForm({ onObjectSaved, onObjectAdded, onCancel, objectToEdi
   });
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
         <div className="md:col-span-2">

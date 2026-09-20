@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { objects, users } from '../db/schema';
@@ -6,7 +7,7 @@ import { ask, message } from '@tauri-apps/plugin-dialog';
 import { 
   Button, Spinner, Input 
 } from '@fluentui/react-components';
-import { Delete20Regular, Search20Regular, Edit20Regular, Building20Regular } from '@fluentui/react-icons';
+import { Delete20Regular, Search20Regular, Edit20Regular, Building20Regular, DocumentAdd20Regular } from '@fluentui/react-icons';
 
 interface ObjectListProps {
   refreshTrigger: number;
@@ -14,6 +15,7 @@ interface ObjectListProps {
 }
 
 export function ObjectList({ refreshTrigger, onEditObject }: ObjectListProps) {
+  const navigate = useNavigate();
   const [objectData, setObjectData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,6 +136,13 @@ export function ObjectList({ refreshTrigger, onEditObject }: ObjectListProps) {
 
               {/* Aktionen (Buttons) - Unten rechts ausgerichtet */}
               <div className="flex justify-end gap-1 mt-2 pt-2 border-t border-gray-50 dark:border-gray-800/50">
+                <Button
+                  appearance="subtle"
+                  icon={<DocumentAdd20Regular className="text-green-600" />}
+                  onClick={() => navigate('/invoice', { state: { objectId: obj.id, userId: obj.user_id } })}
+                  aria-label={`Rechnung für ${obj.name} schreiben`}
+                  title="Rechnung schreiben"
+                />
                 <Button 
                   appearance="subtle" 
                   icon={<Edit20Regular className="text-blue-500" />} 

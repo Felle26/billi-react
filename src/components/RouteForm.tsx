@@ -53,7 +53,7 @@ export function RouteForm({ onRouteAdded, onCancel, routeToEdit }: RouteFormProp
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form onSubmit={handleSubmit} autoComplete="off" className="flex flex-col gap-6">
       
       <Field label="Name der Route / Tour (z.B. Montags-Tour Nord)" required>
         <Input 

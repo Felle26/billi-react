@@ -9,10 +9,10 @@
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
-    <ram:ID>RE-HM-2026-001</ram:ID>
+    <ram:ID>RE-2026-001</ram:ID>
     <ram:TypeCode>380</ram:TypeCode>
     <ram:IssueDateTime>
-      <udt:DateTimeString format="102">20260919</udt:DateTimeString>
+      <udt:DateTimeString format="102">20260920</udt:DateTimeString>
     </ram:IssueDateTime>
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>
@@ -21,15 +21,15 @@
         <ram:LineID>1</ram:LineID>
       </ram:AssociatedDocumentLineDocument>
       <ram:SpecifiedTradeProduct>
-        <ram:Name>Hausmeisterdienstleistungen</ram:Name>
+        <ram:Name>müll entsorgen</ram:Name>
       </ram:SpecifiedTradeProduct>
       <ram:SpecifiedLineTradeAgreement>
         <ram:NetPriceProductTradePrice>
-          <ram:ChargeAmount>100.00</ram:ChargeAmount>
+          <ram:ChargeAmount>181.00</ram:ChargeAmount>
         </ram:NetPriceProductTradePrice>
       </ram:SpecifiedLineTradeAgreement>
       <ram:SpecifiedLineTradeDelivery>
-        <ram:BilledQuantity unitCode="HUR">1.00</ram:BilledQuantity>
+        <ram:BilledQuantity unitCode="C62">1.00</ram:BilledQuantity>
       </ram:SpecifiedLineTradeDelivery>
       <ram:SpecifiedLineTradeSettlement>
         <ram:ApplicableTradeTax>
@@ -38,7 +38,7 @@
           <ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>
         </ram:ApplicableTradeTax>
         <ram:SpecifiedTradeSettlementLineMonetarySummation>
-          <ram:LineTotalAmount>100.00</ram:LineTotalAmount>
+          <ram:LineTotalAmount>5.00</ram:LineTotalAmount>
         </ram:SpecifiedTradeSettlementLineMonetarySummation>
       </ram:SpecifiedLineTradeSettlement>
     </ram:IncludedSupplyChainTradeLineItem>
@@ -69,22 +69,22 @@
         </ram:SpecifiedTaxRegistration>
       </ram:SellerTradeParty>
       <ram:BuyerTradeParty>
-        <ram:Name>Wohnungsverwaltung Beispiel</ram:Name>
+        <ram:Name>Felsberg-Design</ram:Name>
         <ram:PostalTradeAddress>
           <ram:PostcodeCode>01705</ram:PostcodeCode>
-          <ram:LineOne>Hauptstraße 45</ram:LineOne>
+          <ram:LineOne>Tulpenstraße 18</ram:LineOne>
           <ram:CityName>Freital</ram:CityName>
           <ram:CountryID>DE</ram:CountryID>
         </ram:PostalTradeAddress>
         <ram:URIUniversalCommunication>
-          <ram:URIID schemeID="EM">info@wohnungsverwaltung-beispiel.de</ram:URIID>
+          <ram:URIID schemeID="EM">sebastianfelsberg@web.de</ram:URIID>
         </ram:URIUniversalCommunication>
       </ram:BuyerTradeParty>
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery>
       <ram:ActualDeliverySupplyChainEvent>
         <ram:OccurrenceDateTime>
-          <udt:DateTimeString format="102">20260919</udt:DateTimeString>
+          <udt:DateTimeString format="102">20260920</udt:DateTimeString>
         </ram:OccurrenceDateTime>
       </ram:ActualDeliverySupplyChainEvent>
     </ram:ApplicableHeaderTradeDelivery>
@@ -97,9 +97,9 @@
         </ram:PayeePartyCreditorFinancialAccount>
       </ram:SpecifiedTradeSettlementPaymentMeans>
       <ram:ApplicableTradeTax>
-        <ram:CalculatedAmount>19.00</ram:CalculatedAmount>
+        <ram:CalculatedAmount>34.39</ram:CalculatedAmount>
         <ram:TypeCode>VAT</ram:TypeCode>
-        <ram:BasisAmount>100.00</ram:BasisAmount>
+        <ram:BasisAmount>181.00</ram:BasisAmount>
         <ram:CategoryCode>S</ram:CategoryCode>
         <ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>
       </ram:ApplicableTradeTax>
@@ -107,11 +107,11 @@
         <ram:Description>Zahlbar innerhalb von 14 Tagen ohne Abzug.</ram:Description>
       </ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
-        <ram:LineTotalAmount>100.00</ram:LineTotalAmount>
-        <ram:TaxBasisTotalAmount>100.00</ram:TaxBasisTotalAmount>
-        <ram:TaxTotalAmount currencyID="EUR">19.00</ram:TaxTotalAmount>
-        <ram:GrandTotalAmount>119.00</ram:GrandTotalAmount>
-        <ram:DuePayableAmount>119.00</ram:DuePayableAmount>
+        <ram:LineTotalAmount>181.00</ram:LineTotalAmount>
+        <ram:TaxBasisTotalAmount>181.00</ram:TaxBasisTotalAmount>
+        <ram:TaxTotalAmount currencyID="EUR">34.39</ram:TaxTotalAmount>
+        <ram:GrandTotalAmount>215.39</ram:GrandTotalAmount>
+        <ram:DuePayableAmount>215.39</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>
   </rsm:SupplyChainTradeTransaction>

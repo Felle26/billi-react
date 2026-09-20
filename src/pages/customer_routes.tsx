@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
   DragEndEvent,
@@ -16,7 +17,7 @@ import { db } from '../db';
 import { objects, planned_routes, users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner } from '@fluentui/react-components';
-import { Building20Regular, Map20Regular, SubtractCircle20Regular, Add20Regular, Edit20Regular, Delete20Regular } from '@fluentui/react-icons';
+import { Building20Regular, Map20Regular, SubtractCircle20Regular, Add20Regular, Edit20Regular, Delete20Regular, DocumentAdd20Regular } from '@fluentui/react-icons';
 import { RouteForm } from '../components/RouteForm';
 import './../App.css'
 
@@ -59,6 +60,7 @@ function DraggableObjectCard({ object, onClickUnassign }: { object: any; onClick
 }
 
 function SortableObjectItem({ object, index, onUnassign, isActiveDrag }: { object: any; index: number; onUnassign: () => void; isActiveDrag?: boolean }) {
+  const navigate = useNavigate();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: `object-${object.id}`,
     data: { type: 'object', objectId: object.id, routeId: object.planned_route_Id ?? null },
@@ -95,6 +97,21 @@ function SortableObjectItem({ object, index, onUnassign, isActiveDrag }: { objec
             <div className="text-xs text-gray-500">{object.city}</div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="small"
+              appearance="subtle"
+              icon={<DocumentAdd20Regular className="text-green-600 hover:text-green-700" />}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/invoice', { state: { objectId: object.id, userId: object.user_id } });
+              }}
+              aria-label={`Rechnung für ${object.name} schreiben`}
+              title="Rechnung schreiben"
+            />
             <Button
               size="small"
               appearance="subtle"
