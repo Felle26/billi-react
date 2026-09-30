@@ -183,7 +183,7 @@ export default function Dashboard() {
               customerId: inv.user_id,
               customerName,
               description,
-              amount: total,
+              amount: lineItemsList.length > 0 ? total : Number(inv.total ?? 0),
               dueDate,
               status: 'Offen' as InvoiceStatus,
               lineItems: lineItemsList.length > 0 ? lineItemsList : undefined,

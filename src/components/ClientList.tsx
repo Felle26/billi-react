@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { eq } from 'drizzle-orm';
 import { ask, message } from '@tauri-apps/plugin-dialog';
 import { db } from '../db'; 
-import { users } from '../db/schema'; 
+import { users, invoices, objects } from '../db/schema';
 import { 
   Table, 
   TableHeader, 
@@ -30,8 +30,23 @@ export function ClientList({ refreshTrigger, onEditClient }: ClientListProps) {
   async function loadClients() {
     setIsLoading(true);
     try {
-      const result = await db.select().from(users);
-      setClients(result);
+      const [result, invoiceObjects] = await Promise.all([
+        db.select().from(users),
+        db.select({ userId: invoices.user_id, objectId: objects.id, name: objects.name, street: objects.street, city: objects.city })
+          .from(invoices)
+          .leftJoin(objects, eq(invoices.object_id, objects.id)),
+      ]);
+      const objectsByClient = new Map<number, Map<number, string>>();
+      invoiceObjects.forEach((row) => {
+        if (!row.objectId || !row.name) return;
+        const clientObjects = objectsByClient.get(row.userId) ?? new Map<number, string>();
+        clientObjects.set(row.objectId, `${row.name} (${row.street || ''}, ${row.city || ''})`);
+        objectsByClient.set(row.userId, clientObjects);
+      });
+      setClients(result.map((client) => ({
+        ...client,
+        invoiceObjects: Array.from(objectsByClient.get(client.id)?.entries() ?? []),
+      })));
     } catch (error) {
       console.error("Fehler beim Laden:", error);
     } finally {
@@ -87,6 +102,7 @@ export function ClientList({ refreshTrigger, onEditClient }: ClientListProps) {
               <TableHeaderCell>Firma / Name</TableHeaderCell>
               <TableHeaderCell>Adresse</TableHeaderCell>
               <TableHeaderCell>Kontakt</TableHeaderCell>
+              <TableHeaderCell>Rechnungsobjekte</TableHeaderCell>
               <TableHeaderCell style={{ width: '80px' }}>Aktionen</TableHeaderCell>
             </TableRow>
           </TableHeader>
@@ -116,6 +132,13 @@ export function ClientList({ refreshTrigger, onEditClient }: ClientListProps) {
                     </div>
                   </TableCell>
                   <TableCell>
+                    {client.invoiceObjects.length > 0 ? (
+                      <ul className="space-y-1 text-sm">
+                        {client.invoiceObjects.map(([objectId, objectName]: [number, string]) => <li key={objectId}>{objectName}</li>)}
+                      </ul>
+                    ) : <span className="text-sm text-gray-400">Noch keine Rechnungsobjekte</span>}
+                  </TableCell>
+                  <TableCell>
                     <Button 
                       appearance="subtle" 
                       icon={<Edit20Regular className="text-blue-500" />} 
@@ -136,6 +159,7 @@ export function ClientList({ refreshTrigger, onEditClient }: ClientListProps) {
               // DER RETTER IN DER NOT: Eine Dummy-Reihe, damit Fluent UI beim Rendern nicht abstürzt
               <TableRow>
                 <TableCell>0</TableCell>
+                <TableCell>Dummy</TableCell>
                 <TableCell>Dummy</TableCell>
                 <TableCell>Dummy</TableCell>
                 <TableCell>Dummy</TableCell>

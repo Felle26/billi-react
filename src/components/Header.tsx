@@ -77,7 +77,7 @@ export function Header() {
             icon={<Settings20Regular />} 
             onClick={() => navigate('/settings')}
           >
-            Settings
+            Einstellungen
           </Button>
             <Button 
               appearance="transparent" 

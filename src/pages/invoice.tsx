@@ -20,7 +20,7 @@ import {
 } from '@fluentui/react-components';
 import { Delete20Regular, DocumentPdf24Regular, Drag20Regular, Add20Regular, Subtract20Regular } from '@fluentui/react-icons';
 import { db } from '../db';
-import { users, objects, products, customerProducts } from '../db/schema';
+import { users, objects, products, objectProducts, invoices, settings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { Command } from '@tauri-apps/plugin-shell';
 
@@ -98,6 +98,7 @@ export default function InvoicePage() {
   const [clientList, setClientList] = useState<any[]>([]);
   const [objectList, setObjectList] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
+  const [settingsData, setSettingsData] = useState<any | null>(null);
   const [customerPricing, setCustomerPricing] = useState<Record<number, { custom_price: number; custom_quantity: number }>>({});
 
   // Formulardaten für die Rechnung
@@ -125,21 +126,26 @@ export default function InvoicePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
-  const [showCustomerProducts, setShowCustomerProducts] = useState(true);
+  const [showObjectProducts, setShowObjectProducts] = useState(true);
 
   // Grunddaten beim Start laden (Kunden & Produkte)
   useEffect(() => {
     async function loadBaseData() {
       try {
-        const clients = await db.select().from(users);
-        const prods = await db.select().from(products);
+        const [clients, prods, savedSettings] = await Promise.all([
+          db.select().from(users),
+          db.select().from(products),
+          db.select().from(settings).where(eq(settings.id, 1))
+        ]);
+
         setClientList(clients);
         setProductList(prods);
+        setSettingsData(savedSettings[0] ?? null);
       } catch (error) {
         console.error("Fehler beim Laden der Basisdaten:", error);
       }
     }
-    loadBaseData();
+    void loadBaseData();
   }, []);
 
   useEffect(() => {
@@ -152,27 +158,15 @@ export default function InvoicePage() {
 
     async function loadObjects() {
       try {
-        const [objs, customerAssignments] = await Promise.all([
-          db.select().from(objects).where(eq(objects.user_id, Number(selectedUserId))),
-          db.select().from(customerProducts).where(eq(customerProducts.user_id, Number(selectedUserId)))
-        ]);
-
-        const priceMap: Record<number, { custom_price: number; custom_quantity: number }> = {};
-        customerAssignments.forEach((assignment) => {
-          priceMap[assignment.product_id] = {
-            custom_price: Number(assignment.custom_price ?? 0),
-            custom_quantity: Number(assignment.custom_quantity ?? 1),
-          };
-        });
-
+        const objs = await db.select().from(objects).where(eq(objects.user_id, Number(selectedUserId)));
         setObjectList(objs);
-        setCustomerPricing(priceMap);
+          setCustomerPricing({});
 
         if (invoiceContext?.objectId && objs.some((obj) => obj.id === invoiceContext.objectId)) {
           setSelectedObjectId(invoiceContext.objectId.toString());
         }
       } catch (error) {
-        console.error('Fehler beim Laden der Objekte bzw. Kundenpreise:', error);
+        console.error('Fehler beim Laden der Objekte:', error);
         setObjectList([]);
         setCustomerPricing({});
       }
@@ -180,6 +174,32 @@ export default function InvoicePage() {
 
     void loadObjects();
   }, [selectedUserId, invoiceContext?.objectId]);
+
+  useEffect(() => {
+    if (!selectedObjectId) {
+      setCustomerPricing({});
+      return;
+    }
+
+    async function loadObjectProducts() {
+      try {
+        const assignments = await db.select().from(objectProducts).where(eq(objectProducts.object_id, Number(selectedObjectId)));
+        const priceMap: Record<number, { custom_price: number; custom_quantity: number }> = {};
+        assignments.forEach((assignment) => {
+          priceMap[assignment.product_id] = {
+            custom_price: Number(assignment.custom_price ?? 0),
+            custom_quantity: Number(assignment.custom_quantity ?? 1),
+          };
+        });
+        setCustomerPricing(priceMap);
+      } catch (error) {
+        console.error('Fehler beim Laden der Objektprodukte:', error);
+        setCustomerPricing({});
+      }
+    }
+
+    void loadObjectProducts();
+  }, [selectedObjectId]);
 
   useEffect(() => {
     if (!selectedUserId || Object.keys(customerPricing).length === 0) return;
@@ -213,11 +233,11 @@ export default function InvoicePage() {
     setCustomerPricing({});
   }
 
-  // Zwischen Kundenprodukten und der vollständigen Produktstammliste umschaltbar.
-  const customerProductsList = selectedUserId
+  // Zwischen Objektprodukten und der vollständigen Produktstammliste umschaltbar.
+  const objectProductsList = selectedObjectId
     ? productList.filter((product) => customerPricing[product.id])
     : [];
-  const visibleProducts = showCustomerProducts ? customerProductsList : productList;
+  const visibleProducts = showObjectProducts ? objectProductsList : productList;
   const allProducts = [BLANK_PRODUCT, ...visibleProducts];
 
   // 3. Position zur Rechnung hinzufügen
@@ -302,6 +322,21 @@ export default function InvoicePage() {
         throw new Error('Kunde oder Objekt konnte nicht geladen werden.');
       }
 
+      const configuredSettings = settingsData ?? ((await db.select().from(settings).where(eq(settings.id, 1)))[0] ?? null);
+      const invoiceOutputDir = configuredSettings?.invoice_path?.trim() || '';
+      const seller = {
+        company: configuredSettings?.company_name || '',
+        name: configuredSettings?.owner_name || '',
+        street: configuredSettings?.street || '',
+        zip: configuredSettings?.zip || '',
+        city: configuredSettings?.city || '',
+        email: configuredSettings?.email || '',
+        fon: configuredSettings?.phone || '',
+        tax_id: configuredSettings?.tax_id || '',
+        invoice_path: invoiceOutputDir,
+        logo_path: configuredSettings?.logo_path || '',
+      };
+
       const payload = {
         invoiceId: invoiceId,
         netTotal: netTotal,
@@ -315,6 +350,8 @@ export default function InvoicePage() {
         } : null,
         client: client,
         object: obj,
+        seller,
+        output_dir: invoiceOutputDir,
         items: items.map((item) => ({
           name: item.name,
           description: item.info || item.name,
@@ -341,6 +378,12 @@ export default function InvoicePage() {
       }
 
       if (output.code === 0 && response?.status === 'success') {
+        await db.insert(invoices).values({
+          user_id: client.id,
+          object_id: obj.id,
+          invoice_path: response.document_path || '',
+          total: netTotal,
+        });
         setStatusMessage(`Erfolgreich gespeichert unter: ${response.document_path || 'unbekanntem Pfad'}`);
       } else {
         setStatusMessage(`Fehler: ${response?.message || output.stderr || `Sidecar beendet mit Code ${output.code ?? 'unbekannt'}`}`);
@@ -373,7 +416,8 @@ export default function InvoicePage() {
           <div className="flex flex-col gap-2">
             <Field label="Kunde auswählen" required>
               <Combobox 
-                placeholder="Kunde wählen..."
+                  placeholder="Kunde wählen..."
+                  autoComplete="off"
                 value={clientList.find(client => client.id.toString() === selectedUserId) ? getClientName(clientList.find(client => client.id.toString() === selectedUserId)) : ''}
                 onOptionSelect={(_e, data) => handleClientSelect(data.optionValue || '')}
               >
@@ -390,7 +434,10 @@ export default function InvoicePage() {
                 placeholder="Objekt wählen..."
                 disabled={!selectedUserId}
                 value={objectList.find(obj => obj.id.toString() === selectedObjectId) ? `${objectList.find(obj => obj.id.toString() === selectedObjectId)?.name} (${objectList.find(obj => obj.id.toString() === selectedObjectId)?.street}, ${objectList.find(obj => obj.id.toString() === selectedObjectId)?.city})` : ''}
-                onOptionSelect={(_e, data) => setSelectedObjectId(data.optionValue || '')}
+                onOptionSelect={(_e, data) => {
+                  setSelectedObjectId(data.optionValue || '');
+                  setCustomerPricing({});
+                }}
               >
                 {objectList.map(obj => (
                   <Option
@@ -447,17 +494,17 @@ export default function InvoicePage() {
               <div className="flex shrink-0 gap-2">
                 <Button
                   size="small"
-                  appearance={showCustomerProducts ? 'primary' : 'secondary'}
-                  onClick={() => setShowCustomerProducts(true)}
-                  aria-pressed={showCustomerProducts}
+                  appearance={showObjectProducts ? 'primary' : 'secondary'}
+                  onClick={() => setShowObjectProducts(true)}
+                  aria-pressed={showObjectProducts}
                 >
-                  Kunde
+                  Objekt
                 </Button>
                 <Button
                   size="small"
-                  appearance={showCustomerProducts ? 'secondary' : 'primary'}
-                  onClick={() => setShowCustomerProducts(false)}
-                  aria-pressed={!showCustomerProducts}
+                  appearance={showObjectProducts ? 'secondary' : 'primary'}
+                  onClick={() => setShowObjectProducts(false)}
+                  aria-pressed={!showObjectProducts}
                 >
                   Standard
                 </Button>

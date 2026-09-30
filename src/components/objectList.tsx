@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { objects, users } from '../db/schema';
+import { objectProducts, objects, users } from '../db/schema';
 import { ask, message } from '@tauri-apps/plugin-dialog';
 import { 
   Button, Spinner, Input 
@@ -60,6 +60,7 @@ export function ObjectList({ refreshTrigger, onEditObject }: ObjectListProps) {
     if (!confirmed) return;
 
     try {
+      await db.delete(objectProducts).where(eq(objectProducts.object_id, id));
       await db.delete(objects).where(eq(objects.id, id));
       await loadObjects();
     } catch (error) {

@@ -33,6 +33,30 @@ pub fn run() {
             sql: include_str!("../../drizzle/0003_add_customer_product_quantity.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add_settings_table",
+            sql: include_str!("../../drizzle/0004_add_settings_table.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "add_logo_path",
+            sql: include_str!("../../drizzle/0005_add_logo_path.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "create_object_products",
+            sql: include_str!("../../drizzle/0006_create_object_products.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "add_invoice_total",
+            sql: include_str!("../../drizzle/0007_add_invoice_total.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

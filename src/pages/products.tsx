@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/core';
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Spinner } from '@fluentui/react-components';
-import { Add20Regular, Delete20Regular, Edit20Regular, Money20Regular, People20Regular, Save20Regular } from '@fluentui/react-icons';
+import { Add20Regular, Building20Regular, Delete20Regular, Edit20Regular, Money20Regular, Save20Regular } from '@fluentui/react-icons';
 import { db } from '../db';
-import { customerProducts, products, users } from '../db/schema';
+import { objectProducts, objects, products } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 type Product = typeof products.$inferSelect;
-type Customer = typeof users.$inferSelect;
-type Assignment = typeof customerProducts.$inferSelect & { product: Product };
+type Customer = typeof objects.$inferSelect;
+type Assignment = typeof objectProducts.$inferSelect & { product: Product; user_id: number };
 const productUnits = ['lfm / m', 'm²', 'm³', 'Stk.'] as const;
 
 function formatPrice(value: number) {
@@ -16,8 +16,7 @@ function formatPrice(value: number) {
 }
 
 function getCustomerName(customer: Customer) {
-  const fullName = `${customer.first_name || ''} ${customer.last_name || ''}`.trim();
-  return customer.company_name || fullName || 'Unbekannter Kunde';
+  return customer.name;
 }
 
 function DraggableProduct({ product, assigned, onEdit, onDelete }: { product: Product; assigned: boolean; onEdit?: () => void; onDelete?: () => void }) {
@@ -80,10 +79,10 @@ function DraggableAssignment({ assignment, onPriceChange, onQuantityChange, onUn
 }
 
 function CustomerDropZone({ customer, assignments, collapsed, onToggle, onPriceChange, onQuantityChange, onUnassign }: { customer: Customer; assignments: Assignment[]; collapsed: boolean; onToggle: () => void; onPriceChange: (id: number, value: string) => void; onQuantityChange?: (id: number, value: string) => void; onUnassign: (id: number) => void }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `customer-${customer.id}` });
+  const { isOver, setNodeRef } = useDroppable({ id: `object-${customer.id}` });
   return (
       <section ref={setNodeRef} className={`flex min-h-0 flex-col rounded-xl border bg-gray-50 p-4 transition dark:bg-gray-800 ${isOver ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100 dark:bg-blue-950/30' : 'border-gray-200 dark:border-gray-700'}`}>
-  <button type="button" onClick={onToggle} className="mb-2 flex w-full items-center gap-2 border-b border-gray-200 pb-2 text-left dark:border-gray-700"><People20Regular className="text-blue-600" /><div className="min-w-0"><h3 className="truncate font-semibold">{getCustomerName(customer)}</h3><p className="text-xs text-gray-500">{assignments.length} Produkt{assignments.length === 1 ? '' : 'e'} {collapsed ? '(anzeigen)' : '(ausblenden)'}</p></div></button>
+  <button type="button" onClick={onToggle} className="mb-2 flex w-full items-center gap-2 border-b border-gray-200 pb-2 text-left dark:border-gray-700"><Building20Regular className="text-blue-600" /><div className="min-w-0"><h3 className="truncate font-semibold">{getCustomerName(customer)}</h3><p className="truncate text-xs text-gray-500">{customer.street} {customer.number}, {customer.zip} {customer.city}</p><p className="text-xs text-gray-500">{assignments.length} Produkt{assignments.length === 1 ? '' : 'e'} {collapsed ? '(anzeigen)' : '(ausblenden)'}</p></div></button>
   {!collapsed && <div className="grow space-y-2">{assignments.length === 0 ? <p className="py-4 text-center text-xs italic text-gray-400">Produkte hierher ziehen</p> : assignments.map((assignment) => <DraggableAssignment key={assignment.id} assignment={assignment} onPriceChange={onPriceChange} onQuantityChange={onQuantityChange} onUnassign={onUnassign} />)}</div>}
     </section>
   );
@@ -105,10 +104,10 @@ export default function ProductsPage() {
   async function loadData() {
     setIsLoading(true);
     try {
-      const [loadedCustomers, loadedProducts, loadedAssignments] = await Promise.all([db.select().from(users), db.select().from(products), db.select().from(customerProducts)]);
+      const [loadedCustomers, loadedProducts, loadedAssignments] = await Promise.all([db.select().from(objects), db.select().from(products), db.select().from(objectProducts)]);
       setCustomers(loadedCustomers);
       setProductList(loadedProducts);
-      setAssignments(loadedAssignments.map((assignment) => ({ ...assignment, product: loadedProducts.find((product) => product.id === assignment.product_id)! })).filter((assignment) => assignment.product));
+      setAssignments(loadedAssignments.map((assignment) => ({ ...assignment, user_id: assignment.object_id, product: loadedProducts.find((product) => product.id === assignment.product_id)! })).filter((assignment) => assignment.product));
     } catch (error) { console.error('Fehler beim Laden der Produkte:', error); } finally { setIsLoading(false); }
   }
 
@@ -149,30 +148,30 @@ export default function ProductsPage() {
 
   const deleteProduct = async () => {
     if (!productToDelete) return;
-    await db.delete(customerProducts).where(eq(customerProducts.product_id, productToDelete.id));
+    await db.delete(objectProducts).where(eq(objectProducts.product_id, productToDelete.id));
     await db.delete(products).where(eq(products.id, productToDelete.id));
     setProductToDelete(null);
     await loadData();
   };
 
   const assignProduct = async (productId: number, customerId: number) => {
-      if (assignments.some((assignment) => assignment.product_id === productId && assignment.user_id === customerId)) return;
+      if (assignments.some((assignment) => assignment.product_id === productId && assignment.object_id === customerId)) return;
       const product = productList.find((item) => item.id === productId);
       if (!product) return;
-      await db.insert(customerProducts).values({ user_id: customerId, product_id: productId, custom_price: product.price, custom_quantity: product.product_count || 0, sort_order: assignments.filter((item) => item.user_id === customerId).length });
+      await db.insert(objectProducts).values({ object_id: customerId, product_id: productId, custom_price: product.price, custom_quantity: product.product_count || 0, sort_order: assignments.filter((item) => item.object_id === customerId).length });
       await loadData();
     };
 
   const moveAssignment = async (assignment: Assignment, customerId: number) => {
-      if (assignment.user_id === customerId || assignments.some((item) => item.user_id === customerId && item.product_id === assignment.product_id)) return;
-      await db.update(customerProducts).set({ user_id: customerId }).where(eq(customerProducts.id, assignment.id));
+      if (assignment.object_id === customerId || assignments.some((item) => item.object_id === customerId && item.product_id === assignment.product_id)) return;
+      await db.update(objectProducts).set({ object_id: customerId }).where(eq(objectProducts.id, assignment.id));
       await loadData();
     };
 
   const handleDragEnd = async ({ active, over }: DragEndEvent) => {
       setActiveProduct(null);
       if (!over) return;
-      const customerId = Number(String(over.id).replace('customer-', ''));
+      const customerId = Number(String(over.id).replace('object-', ''));
       if (!Number.isFinite(customerId)) return;
       const activeId = String(active.id);
       if (activeId.startsWith('assignment-')) {
@@ -188,14 +187,14 @@ export default function ProductsPage() {
       const price = Number(formatPrice(Number(value)));
       if (!Number.isFinite(price) || price < 0) return;
       setAssignments((current) => current.map((assignment) => assignment.id === assignmentId ? { ...assignment, custom_price: price } : assignment));
-      await db.update(customerProducts).set({ custom_price: price }).where(eq(customerProducts.id, assignmentId));
+      await db.update(objectProducts).set({ custom_price: price }).where(eq(objectProducts.id, assignmentId));
     };
 
   const updateQuantity = async (assignmentId: number, value: string) => {
       const quantity = Number(formatPrice(Number(value)));
       if (!Number.isFinite(quantity) || quantity < 0) return;
       setAssignments((current) => current.map((assignment) => assignment.id === assignmentId ? { ...assignment, custom_quantity: quantity } : assignment));
-      await db.update(customerProducts).set({ custom_quantity: quantity }).where(eq(customerProducts.id, assignmentId));
+      await db.update(objectProducts).set({ custom_quantity: quantity }).where(eq(objectProducts.id, assignmentId));
     };
 
   useEffect(() => {
@@ -208,7 +207,7 @@ export default function ProductsPage() {
   }, [assignments]);
 
   const deleteAssignment = async (assignmentId: number) => {
-      await db.delete(customerProducts).where(eq(customerProducts.id, assignmentId));
+      await db.delete(objectProducts).where(eq(objectProducts.id, assignmentId));
       setAssignments((current) => current.filter((assignment) => assignment.id !== assignmentId));
       setAssignmentToDelete(null);
     };
@@ -223,10 +222,10 @@ export default function ProductsPage() {
     };
 
   return <div className="flex h-[calc(100vh-140px)] flex-col gap-4">
-      <Dialog open={productToDelete !== null} onOpenChange={(_, data) => { if (!data.open) setProductToDelete(null); }}><DialogSurface><DialogBody><DialogTitle>Grundprodukt löschen?</DialogTitle><DialogContent>Möchtest du „{productToDelete?.name}“ wirklich löschen? Die Zuordnungen zu Kunden werden ebenfalls entfernt.</DialogContent><DialogActions><Button appearance="secondary" onClick={() => setProductToDelete(null)}>Abbrechen</Button><Button appearance="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={deleteProduct}>Löschen</Button></DialogActions></DialogBody></DialogSurface></Dialog>
-      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"><div><h2 className="flex items-center gap-2 text-xl font-semibold"><People20Regular /> Kundenprodukte</h2><p className="text-sm text-gray-500">Eigene Preise pro Kunde festlegen</p></div><Button appearance="primary" icon={<Add20Regular />} onClick={() => setIsProductDialogOpen(true)}>Produkt anlegen</Button></div>
+      <Dialog open={productToDelete !== null} onOpenChange={(_, data) => { if (!data.open) setProductToDelete(null); }}><DialogSurface><DialogBody><DialogTitle>Produkt löschen?</DialogTitle><DialogContent>Möchtest du „{productToDelete?.name}“ wirklich löschen? Die Zuordnungen zu Objekten werden ebenfalls entfernt.</DialogContent><DialogActions><Button appearance="secondary" onClick={() => setProductToDelete(null)}>Abbrechen</Button><Button appearance="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={deleteProduct}>Löschen</Button></DialogActions></DialogBody></DialogSurface></Dialog>
+      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"><div><h2 className="flex items-center gap-2 text-xl font-semibold"><Building20Regular /> Objektprodukte</h2><p className="text-sm text-gray-500">Produkte und Preise je Objekt hinterlegen</p></div><Button appearance="primary" icon={<Add20Regular />} onClick={() => setIsProductDialogOpen(true)}>Produkt anlegen</Button></div>
       <Dialog open={isProductDialogOpen} onOpenChange={(_, data) => setIsProductDialogOpen(data.open)}><DialogSurface><DialogBody><DialogTitle>{productToEdit ? 'Produkt bearbeiten' : 'Neues Produkt anlegen'}</DialogTitle><DialogContent><form id="new-product-form" autoComplete="off" className="mt-4 flex flex-col gap-4" onSubmit={createProduct}><Field label="Name" required><Input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} required /></Field><Field label="Beschreibung"><Input value={newProduct.description} onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })} /></Field><div className="grid grid-cols-1 gap-3 sm:grid-cols-4"><Field label="Preis" required><Input type="number" min="0" step="0.01" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })} onBlur={() => setNewProduct((current) => ({ ...current, price: formatPrice(Number(current.price)) }))} required /></Field><Field label="Menge" required><Input type="number" min="0" step="0.01" value={newProduct.productCount} onChange={(e) => setNewProduct({ ...newProduct, productCount: e.target.value })} onBlur={() => setNewProduct((current) => ({ ...current, productCount: formatPrice(Number(current.productCount)) }))} required /></Field><Field label="Währung"><Input value={newProduct.priceTag} onChange={(e) => setNewProduct({ ...newProduct, priceTag: e.target.value })} /></Field><Field label="Einheit" required><Select value={newProduct.productUnit} onChange={(e) => setNewProduct({ ...newProduct, productUnit: e.target.value })}>{productUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</Select></Field></div></form></DialogContent><DialogActions><Button appearance="secondary" onClick={() => setIsProductDialogOpen(false)}>Abbrechen</Button><Button appearance="primary" type="submit" form="new-product-form" icon={<Save20Regular />}>{productToEdit ? 'Speichern' : 'Anlegen'}</Button></DialogActions></DialogBody></DialogSurface></Dialog>
-      <Dialog open={assignmentToDelete !== null} onOpenChange={(_, data) => { if (!data.open) setAssignmentToDelete(null); }}><DialogSurface><DialogBody><DialogTitle>Produkt-Zuordnung löschen?</DialogTitle><DialogContent>Möchtest du „{assignmentToDelete?.product.name}“ wirklich von diesem Kunden entfernen?</DialogContent><DialogActions><Button appearance="secondary" onClick={() => setAssignmentToDelete(null)}>Abbrechen</Button><Button appearance="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={() => assignmentToDelete && unassign(assignmentToDelete.id)}>Löschen</Button></DialogActions></DialogBody></DialogSurface></Dialog>
+      <Dialog open={assignmentToDelete !== null} onOpenChange={(_, data) => { if (!data.open) setAssignmentToDelete(null); }}><DialogSurface><DialogBody><DialogTitle>Produkt-Zuordnung löschen?</DialogTitle><DialogContent>Möchtest du „{assignmentToDelete?.product.name}“ wirklich von diesem Objekt entfernen?</DialogContent><DialogActions><Button appearance="secondary" onClick={() => setAssignmentToDelete(null)}>Abbrechen</Button><Button appearance="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={() => assignmentToDelete && unassign(assignmentToDelete.id)}>Löschen</Button></DialogActions></DialogBody></DialogSurface></Dialog>
       {isLoading ? <div className="flex grow items-center justify-center"><Spinner label="Lade Kunden und Produkte..." /></div> : <DndContext onDragStart={({ active }) => { const id = String(active.id); const assignment = id.startsWith('assignment-') ? assignments.find((item) => item.id === Number(id.replace('assignment-', ''))) : null; const productId = assignment?.product_id ?? Number(id.replace('product-', '')); setActiveProduct(productList.find((product) => product.id === productId) || null); }} onDragEnd={handleDragEnd} onDragCancel={() => setActiveProduct(null)}><div className="grid min-h-0 grow grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,2fr)]"><aside className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><h3 className="mb-3 border-b border-gray-200 pb-2 font-bold dark:border-gray-700">Produkte ({productList.length})</h3><div className="min-h-0 grow space-y-3 overflow-y-auto pr-1">{productList.length === 0 ? <p className="text-sm text-gray-500">Noch keine Produkte angelegt.</p> : productList.map((product) => <DraggableProduct key={product.id} product={product} assigned={assignments.some((assignment) => assignment.product_id === product.id)} />)}</div></aside><main className="min-h-0 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"><div className="grid grid-cols-1 gap-4 xl:grid-cols-2">{customers.map((customer) => <CustomerDropZone key={customer.id} customer={customer} collapsed={collapsedCustomers.has(customer.id)} onToggle={() => setCollapsedCustomers((current) => { const next = new Set(current); if (next.has(customer.id)) next.delete(customer.id); else next.add(customer.id); return next; })} assignments={assignments.filter((assignment) => assignment.user_id === customer.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))} onPriceChange={updatePrice} onUnassign={unassign} />)}</div>{customers.length === 0 && <p className="py-8 text-center text-gray-500">Noch keine Kunden angelegt.</p>}</main></div><DragOverlay>{activeProduct && <div className="rounded-lg border-2 border-blue-500 bg-white p-3 shadow-xl dark:bg-gray-700"><span className="font-semibold">{activeProduct.name}</span></div>}</DragOverlay></DndContext>}
     </div>;
 }

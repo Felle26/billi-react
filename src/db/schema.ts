@@ -55,7 +55,7 @@ export const objects = sqliteTable("Object", {
   country: text("country").notNull(),
 });
 
-export const objectsRelations = relations(objects, ({ one }) => ({
+export const objectsRelations = relations(objects, ({ one, many }) => ({
   user: one(users, {
     fields: [objects.user_id],
     references: [users.id],
@@ -64,6 +64,7 @@ export const objectsRelations = relations(objects, ({ one }) => ({
     fields: [objects.planned_route_Id],
     references: [planned_routes.id],
   }), // Ein Objekt gehört zu genau einer geplanten Route
+  products: many(objectProducts),
 }));
 
 export const products = sqliteTable("products", {
@@ -79,6 +80,7 @@ export const products = sqliteTable("products", {
 export const productsRelations = relations(products, ({ many }) => ({
   invoiceItems: many(invoiceItems), // Ein Produkt kann auf vielen Rechnungen stehen
   customerProducts: many(customerProducts),
+  objectProducts: many(objectProducts),
 }));
 
 export const customerProducts = sqliteTable("customer_products", {
@@ -105,6 +107,30 @@ export const customerProductsRelations = relations(customerProducts, ({ one }) =
   }),
 }));
 
+export const objectProducts = sqliteTable("object_products", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  object_id: integer("object_id")
+    .notNull()
+    .references(() => objects.id),
+  product_id: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  custom_price: real("custom_price").notNull(),
+  custom_quantity: real("custom_quantity").notNull().default(0),
+  sort_order: integer("sort_order").default(0),
+});
+
+export const objectProductsRelations = relations(objectProducts, ({ one }) => ({
+  object: one(objects, {
+    fields: [objectProducts.object_id],
+    references: [objects.id],
+  }),
+  product: one(products, {
+    fields: [objectProducts.product_id],
+    references: [products.id],
+  }),
+}));
+
 export const invoices = sqliteTable("invoices", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   user_id: integer("user_id")
@@ -120,7 +146,8 @@ export const invoices = sqliteTable("invoices", {
     .notNull()
     .$defaultFn(() => new Date()),
   deleted_at: integer("deleted_at", { mode: "timestamp" }),
-  invoice_path: text("invoice_path").notNull()
+  invoice_path: text("invoice_path").notNull(),
+  total: real("total").notNull().default(0),
 });
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
@@ -168,3 +195,22 @@ export const planned_routes = sqliteTable("planned_routes", {
 export const planned_routesRelations = relations(planned_routes, ({ many }) => ({
   objects: many(objects), // Eine geplante Route kann viele Objekte enthalten
 }));
+
+export const settings = sqliteTable("settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+
+  // Kontaktdaten (für den Rechnungsabsender)
+  company_name: text("company_name").default(""),
+  owner_name: text("owner_name").default(""),
+  street: text("street").default(""),
+  zip: text("zip").default(""),
+  city: text("city").default(""),
+  phone: text("phone").default(""),
+  email: text("email").default(""),
+  tax_id: text("tax_id").default(""), // Steuernummer
+
+  // Speicherpfade
+  backup_path: text("backup_path").default(""),
+  invoice_path: text("invoice_path").default(""),
+  logo_path: text("logo_path").default(""),
+});
