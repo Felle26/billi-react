@@ -3,16 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Spinner } from '@fluentui/react-components';
 import {
   Add20Regular,
+  Delete20Regular,
   Eye20Regular,
-  ArrowDownload20Regular,
+  Open20Regular,
   Dismiss20Regular,
   Document20Regular,
   CheckmarkCircle20Regular,
   Clock20Regular,
   Filter20Regular,
 } from '@fluentui/react-icons';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+import { Command } from '@tauri-apps/plugin-shell';
 import { db } from '../db';
-import { invoices as invoicesTable, users as usersTable, invoiceItems, products } from '../db/schema';
+import { invoices as invoicesTable, users as usersTable, invoiceItems } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 type InvoiceStatus = 'Offen' | 'Bezahlt' | 'Entwurf';
@@ -29,55 +32,22 @@ type Invoice = {
   id: number;
   number: string;
   customerId: number;
+  customerNumber: string;
   customerName: string;
   description: string;
+  netAmount: number;
   amount: number;
+  vatAmount: number;
+  grossAmount: number;
+  cashDiscountEnabled: boolean;
+  cashDiscountPercent: number;
+  discountedAmount: number;
+  issueDate: string;
   dueDate: string;
   status: InvoiceStatus;
+  invoicePath: string;
   lineItems?: LineItem[];
 };
-
-const initialSampleInvoices: Invoice[] = [
-  {
-    id: 1,
-    number: 'RE-2026-0042',
-    customerId: 1,
-    customerName: 'Nordlicht Studio',
-    description: 'Website-Relaunch',
-    amount: 2450,
-    dueDate: '2026-09-12',
-    status: 'Offen',
-    lineItems: [
-      { id: 101, description: 'Website-Relaunch Design & Dev', quantity: '1', amount: '2450' }
-    ]
-  },
-  {
-    id: 2,
-    number: 'RE-2026-0041',
-    customerId: 2,
-    customerName: 'Weber & Partner',
-    description: 'Beratungsleistung August',
-    amount: 1200,
-    dueDate: '2026-09-03',
-    status: 'Bezahlt',
-    lineItems: [
-      { id: 102, description: 'Beratung 12 Std.', quantity: '12', amount: '100' }
-    ]
-  },
-  {
-    id: 3,
-    number: 'RE-2026-0040',
-    customerId: 3,
-    customerName: 'Morgenrot GmbH',
-    description: 'Markenworkshop',
-    amount: 850,
-    dueDate: '2026-09-18',
-    status: 'Entwurf',
-    lineItems: [
-      { id: 103, description: 'Markenworkshop Halbtags', quantity: '1', amount: '850' }
-    ]
-  },
-];
 
 const invoiceFilters = ['Alle', 'Offen', 'Überfällig', 'Bezahlt', 'Entwurf'] as const;
 
@@ -97,7 +67,11 @@ const monthOptions = [
 ];
 
 const euro = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
-const dateFormatter = new Intl.DateTimeFormat('de-DE');
+const dateFormatter = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
 
 function greetingForHour(hour: number) {
   if (hour < 5) return 'Zeit zum Schlafen';
@@ -124,6 +98,15 @@ function formatDate(dateStr: string) {
   }
 }
 
+function getCustomerName(client: typeof usersTable.$inferSelect | null, fallbackId: number) {
+  const fullName = `${client?.first_name || ''} ${client?.last_name || ''}`.trim();
+  const companyName = client?.company_name?.trim() || '';
+  const postalCode = client?.zip?.trim() || '';
+
+  if (companyName && companyName !== postalCode) return companyName;
+  return fullName || (companyName && !/^\d{5}$/.test(companyName) ? companyName : '') || `Kunde ${fallbackId}`;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -133,6 +116,9 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState('Alle');
   const [currentHour, setCurrentHour] = useState(12);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletingInvoices, setIsDeletingInvoices] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   async function loadDashboardData() {
     setIsLoading(true);
@@ -150,53 +136,73 @@ export default function Dashboard() {
           dbInvoices.map(async (row) => {
             const inv = row.invoice;
             const usr = row.user;
-            const customerName = usr?.company_name || `${usr?.first_name || ''} ${usr?.last_name || ''}`.trim() || 'Unbekannter Kunde';
+            const customerNumber = usr?.company_id || String(usr?.id || inv.user_id);
+            const customerName = getCustomerName(usr, inv.user_id);
 
             const items = await db
-              .select({
-                item: invoiceItems,
-                product: products,
-              })
+              .select()
               .from(invoiceItems)
-              .leftJoin(products, eq(invoiceItems.product_id, products.id))
               .where(eq(invoiceItems.invoice_id, inv.id));
 
-            let total = 0;
-            const lineItemsList: LineItem[] = items.map((it) => {
-              const qty = it.item.quantity ?? 1;
-              const price = it.item.price_at_time ?? it.product?.price ?? 0;
-              total += qty * price;
+            let lineItemsGrossTotal = 0;
+            const lineItemsList: LineItem[] = items.map((item) => {
+              const qty = item.quantity ?? 1;
+              const price = item.price_at_time ?? 0;
+              lineItemsGrossTotal += qty * price;
               return {
-                id: it.item.id,
-                description: it.product?.name || 'Leistung',
+                id: item.id,
+                description: item.product_name || 'Leistung',
                 quantity: String(qty),
                 amount: String(price),
               };
             });
 
             const description = lineItemsList.map((i) => i.description).join(', ') || 'Rechnung';
-            const dueDate = inv.created_at ? new Date(inv.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+            const netTotal = Number(inv.total || 0) || lineItemsGrossTotal / 1.19;
+            const grossAmount = Number(inv.gross_total || 0) || lineItemsGrossTotal;
+            const vatAmount = Number(inv.vat_total || 0) || grossAmount - netTotal;
+            const cashDiscountEnabled = Number(inv.cash_discount_enabled ?? 0) === 1;
+            const cashDiscountPercent = Number(inv.cash_discount_percent ?? 0);
+            const discountedAmount = Number(inv.payable_total || 0) || (
+              cashDiscountEnabled
+                ? grossAmount * (1 - cashDiscountPercent / 100)
+                : grossAmount
+            );
+            const createdAt = inv.created_at ? new Date(inv.created_at) : new Date();
+            const issueDate = inv.issue_date || `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}-${String(createdAt.getDate()).padStart(2, '0')}`;
+            const legacyDueDate = new Date(`${issueDate}T00:00:00`);
+            legacyDueDate.setDate(legacyDueDate.getDate() + 14);
+            const dueDate = inv.due_date || `${legacyDueDate.getFullYear()}-${String(legacyDueDate.getMonth() + 1).padStart(2, '0')}-${String(legacyDueDate.getDate()).padStart(2, '0')}`;
 
             return {
               id: inv.id,
-              number: `RE-${inv.id.toString().padStart(4, '0')}`,
+              number: inv.invoice_number || `RE-${inv.id.toString().padStart(4, '0')}`,
               customerId: inv.user_id,
+              customerNumber,
               customerName,
               description,
-              amount: lineItemsList.length > 0 ? total : Number(inv.total ?? 0),
+              netAmount: netTotal,
+              amount: grossAmount,
+              issueDate,
+              vatAmount,
+              grossAmount,
+              invoicePath: inv.invoice_path || '',
+              cashDiscountEnabled,
+              cashDiscountPercent,
+              discountedAmount,
               dueDate,
-              status: 'Offen' as InvoiceStatus,
+              status: (inv.status || 'Offen') as InvoiceStatus,
               lineItems: lineItemsList.length > 0 ? lineItemsList : undefined,
             };
           })
         );
         setInvoices(formatted);
       } else {
-        setInvoices(initialSampleInvoices);
+        setInvoices([]);
       }
     } catch (err) {
       console.error('Fehler beim Laden der Rechnungen aus der DB:', err);
-      setInvoices(initialSampleInvoices);
+      setInvoices([]);
     } finally {
       setIsLoading(false);
     }
@@ -209,24 +215,84 @@ export default function Dashboard() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const changeInvoiceStatus = (invoiceId: number, newStatus: InvoiceStatus) => {
-    setInvoices((prev) =>
-      prev.map((inv) => (inv.id === invoiceId ? { ...inv, status: newStatus } : inv))
-    );
+  const changeInvoiceStatus = async (invoiceId: number, newStatus: InvoiceStatus) => {
+    try {
+      await db.update(invoicesTable).set({ status: newStatus }).where(eq(invoicesTable.id, invoiceId));
+      setInvoices((prev) => prev.map((invoice) => (
+        invoice.id === invoiceId ? { ...invoice, status: newStatus } : invoice
+      )));
+      setSelectedInvoice((invoice) => (
+        invoice?.id === invoiceId ? { ...invoice, status: newStatus } : invoice
+      ));
+    } catch (error) {
+      console.error('Fehler beim Speichern des Rechnungsstatus:', error);
+    }
   };
+
+  async function handleDeleteAllInvoices() {
+    setIsDeletingInvoices(true);
+    setDeleteError('');
+    try {
+      await db.delete(invoiceItems);
+      await db.delete(invoicesTable);
+      setInvoices([]);
+      setSelectedInvoice(null);
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Fehler beim Löschen der Rechnungen:', error);
+      setDeleteError('Die Rechnungen konnten nicht gelöscht werden. Bitte versuche es erneut.');
+    } finally {
+      setIsDeletingInvoices(false);
+    }
+  }
+
+  async function openInvoicePdf(invoicePath: string) {
+    if (!invoicePath) {
+      alert('Für diese Rechnung ist keine PDF-Datei hinterlegt.');
+      return;
+    }
+
+    try {
+      const normalizedPath = invoicePath
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .replace(/^\\\\\?\\/, '')
+        .replace(/\\/g, '/');
+      try {
+        const windowsOpen = await Command.create('cmd', ['/c', 'start', '', normalizedPath]).execute();
+        if (windowsOpen.code !== 0) throw new Error(`Windows start beendet mit Code ${windowsOpen.code}`);
+      } catch (windowsError) {
+        console.warn('Öffnen über Windows-Dateizuordnung fehlgeschlagen, versuche Tauri:', windowsError);
+        try {
+          await openPath(normalizedPath);
+        } catch (pathError) {
+          console.warn('Öffnen über den Dateipfad fehlgeschlagen, versuche den Browser:', pathError);
+          const fileUrl = normalizedPath.startsWith('//')
+            ? `file:${normalizedPath}`
+            : `file:///${normalizedPath}`;
+          await openUrl(encodeURI(fileUrl));
+        }
+      }
+    } catch (error) {
+      console.error('PDF konnte nicht geöffnet werden:', error);
+      alert(`Die PDF-Datei konnte nicht geöffnet werden: ${invoicePath}`);
+    }
+  }
 
   const openInvoices = invoices.filter((inv) => inv.status === 'Offen');
   const paidInvoices = invoices.filter((inv) => inv.status === 'Bezahlt');
 
-  const visibleInvoices = invoices.filter((inv) => {
-    const dispStatus = calculateInvoiceStatus(inv);
-    const matchesStatus = statusFilter === 'Alle' || dispStatus === statusFilter;
-    const matchesYear = selectedYear === 'Alle' || inv.dueDate.startsWith(selectedYear);
-    const matchesMonth = selectedMonth === 'Alle' || inv.dueDate.slice(5, 7) === selectedMonth;
-    return matchesStatus && matchesYear && matchesMonth;
-  });
+  const visibleInvoices = invoices
+    .filter((inv) => {
+      const dispStatus = calculateInvoiceStatus(inv);
+      const matchesStatus = statusFilter === 'Alle' || dispStatus === statusFilter;
+      const matchesYear = selectedYear === 'Alle' || inv.issueDate.startsWith(selectedYear);
+      const matchesMonth = selectedMonth === 'Alle' || inv.issueDate.slice(5, 7) === selectedMonth;
+      return matchesStatus && matchesYear && matchesMonth;
+    })
+    .sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.id - a.id);
 
-  const invoiceYears = Array.from(new Set(invoices.map((inv) => inv.dueDate.slice(0, 4))))
+  const invoiceYears = Array.from(new Set(invoices.map((inv) => inv.issueDate.slice(0, 4))))
     .filter(Boolean)
     .sort((a, b) => b.localeCompare(a));
 
@@ -248,14 +314,27 @@ export default function Dashboard() {
             Deine Finanzen und offenen Rechnungen auf einen Blick.
           </p>
         </div>
-        <Button
-          appearance="primary"
-          icon={<Add20Regular />}
-          onClick={() => navigate('/invoice')}
-          size="large"
-        >
-          Neue Rechnung
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            appearance="secondary"
+            icon={<Delete20Regular />}
+            onClick={() => {
+              setDeleteError('');
+              setIsDeleteDialogOpen(true);
+            }}
+            disabled={isLoading || invoices.length === 0}
+          >
+            Alle Rechnungen löschen
+          </Button>
+          <Button
+            appearance="primary"
+            icon={<Add20Regular />}
+            onClick={() => navigate('/invoice')}
+            size="large"
+          >
+            Neue Rechnung
+          </Button>
+        </div>
       </div>
 
       {/* Stat Cards Grid */}
@@ -402,8 +481,12 @@ export default function Dashboard() {
                   <th className="py-3 px-3">Nummer</th>
                   <th className="py-3 px-3">Kunde</th>
                   <th className="py-3 px-3">Leistung</th>
+                  <th className="py-3 px-3">Rechnungsdatum</th>
                   <th className="py-3 px-3">Fällig</th>
-                  <th className="py-3 px-3 text-right">Betrag</th>
+                  <th className="py-3 px-3 text-right">Netto</th>
+                  <th className="py-3 px-3 text-right">MwSt. (19%)</th>
+                  <th className="py-3 px-3 text-right">Brutto</th>
+                  <th className="py-3 px-3 text-center">Skonto</th>
                   <th className="py-3 px-3 text-center">Status</th>
                 </tr>
               </thead>
@@ -442,22 +525,53 @@ export default function Dashboard() {
                           aria-label={`Rechnung ${inv.number} ansehen`}
                         />
                       </td>
-                      <td className="py-3 px-3 text-gray-800 dark:text-gray-200">{inv.customerName}</td>
+                      <td className="py-3 px-3 text-gray-800 dark:text-gray-200">
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">Kundennummer: {inv.customerNumber}</span>
+                        <span className="block font-medium">{inv.customerName}</span>
+                      </td>
                       <td className="py-3 px-3 text-gray-500 dark:text-gray-400 max-w-xs truncate">
                         {inv.description}
                       </td>
                       <td className="py-3 px-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
+                        {formatDate(inv.issueDate)}
+                      </td>
+                      <td className="py-3 px-3 text-gray-600 dark:text-gray-300 font-mono text-xs">
                         {formatDate(inv.dueDate)}
                       </td>
-                      <td className="py-3 px-3 text-right font-bold text-gray-900 dark:text-white">
-                        {euro.format(inv.amount)}
+                      <td className="py-3 px-3 text-right text-gray-700 dark:text-gray-300">
+                        {euro.format(inv.netAmount)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-gray-700 dark:text-gray-300">
+                        {euro.format(inv.vatAmount)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-gray-900 dark:text-white">
+                        {inv.cashDiscountEnabled ? (
+                          <div className="space-y-1">
+                            <span className="block text-xs text-gray-500 dark:text-gray-400">
+                              Brutto ohne Skonto: {euro.format(inv.grossAmount)}
+                            </span>
+                            <strong className="block">
+                              Zahlbetrag mit Skonto: {euro.format(inv.discountedAmount)}
+                            </strong>
+                          </div>
+                        ) : (
+                          <strong>{euro.format(inv.grossAmount)}</strong>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {inv.cashDiscountEnabled ? (
+                          <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-300" title="Skonto angewählt">
+                            <CheckmarkCircle20Regular aria-hidden="true" />
+                            {inv.cashDiscountPercent}%
+                          </span>
+                        ) : '–'}
                       </td>
                       <td className="py-3 px-3 text-center">
                         <select
                           value={dispStatus}
                           onChange={(e) => {
                             e.stopPropagation();
-                            changeInvoiceStatus(inv.id, e.target.value as InvoiceStatus);
+                            void changeInvoiceStatus(inv.id, e.target.value as InvoiceStatus);
                           }}
                           onClick={(e) => e.stopPropagation()}
                           className={`px-2.5 py-1 text-xs font-semibold rounded-full border-none cursor-pointer focus:outline-none ${statusBadgeStyle}`}
@@ -478,6 +592,46 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {isDeleteDialogOpen && (
+        <Dialog
+          open={isDeleteDialogOpen}
+          onOpenChange={(_, data) => {
+            if (!data.open && !isDeletingInvoices) setIsDeleteDialogOpen(false);
+          }}
+        >
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Alle Rechnungen löschen?</DialogTitle>
+              <DialogContent className="space-y-2">
+                <p>
+                  {invoices.length} gespeicherte Rechnungen und ihre Positionen werden dauerhaft aus der Datenbank gelöscht.
+                </p>
+                <p>Exportierte PDF/ZUGFeRD-Dateien und der Rechnungsnummern-Zähler bleiben unverändert.</p>
+                {deleteError && <p role="alert" className="text-sm text-red-600">{deleteError}</p>}
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  appearance="secondary"
+                  disabled={isDeletingInvoices}
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                >
+                  Abbrechen
+                </Button>
+                <Button
+                  appearance="secondary"
+                  icon={<Delete20Regular />}
+                  disabled={isDeletingInvoices}
+                  onClick={() => void handleDeleteAllInvoices()}
+                  className="text-red-700 dark:text-red-300"
+                >
+                  {isDeletingInvoices ? 'Lösche...' : 'Endgültig löschen'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
 
       {/* Detail / Print Modal */}
       {selectedInvoice && (
@@ -504,8 +658,14 @@ export default function Dashboard() {
               <DialogContent className="pt-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
                   <div>
-                    <span className="text-xs text-gray-500 block">Kunde</span>
-                    <strong className="text-gray-900 dark:text-white">{selectedInvoice.customerName}</strong>
+                    <span className="text-xs text-gray-500 block">Kundennummer</span>
+                    <strong className="text-gray-900 dark:text-white">{selectedInvoice.customerNumber}</strong>
+                    <span className="mt-1 block text-xs text-gray-500">Kunde / Firma</span>
+                    <strong className="block text-gray-900 dark:text-white">{selectedInvoice.customerName}</strong>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500 block">Rechnungsdatum</span>
+                    <strong className="text-gray-900 dark:text-white">{formatDate(selectedInvoice.issueDate)}</strong>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500 block">Fällig am</span>
@@ -514,41 +674,71 @@ export default function Dashboard() {
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Leistungen</h4>
-                  <ul className="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Rechnungspositionen</h4>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Leistung</th>
+                          <th className="px-3 py-2 text-right font-semibold">Menge</th>
+                          <th className="px-3 py-2 text-right font-semibold">Einzelpreis</th>
+                          <th className="px-3 py-2 text-right font-semibold">Gesamt</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {(selectedInvoice.lineItems || [
                       { id: 1, description: selectedInvoice.description, quantity: '1', amount: String(selectedInvoice.amount) }
                     ]).map((item) => (
-                      <li key={item.id} className="py-2 flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{item.description}</p>
-                          <p className="text-xs text-gray-500">
-                            {item.quantity} × {euro.format(Number(item.amount))}
-                          </p>
-                        </div>
-                        <strong className="text-gray-900 dark:text-white">
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{item.description}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{item.quantity}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{euro.format(Number(item.amount))}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-white">
                           {euro.format(Number(item.quantity) * Number(item.amount))}
-                        </strong>
-                      </li>
+                        </td>
+                      </tr>
                     ))}
-                  </ul>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-900">
-                  <span className="font-bold text-gray-800 dark:text-gray-200">Gesamtbetrag</span>
-                  <strong className="text-xl font-extrabold text-blue-700 dark:text-blue-300">
-                    {euro.format(selectedInvoice.amount)}
-                  </strong>
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-600 dark:text-gray-300">Netto</span>
+                    <span>{euro.format(selectedInvoice.netAmount)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-gray-600 dark:text-gray-300">MwSt. (19%)</span>
+                    <span>{euro.format(selectedInvoice.vatAmount)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t border-gray-200 pt-2 dark:border-gray-700">
+                    <strong className="text-gray-900 dark:text-white">Brutto</strong>
+                    <strong className="text-gray-900 dark:text-white">{euro.format(selectedInvoice.grossAmount)}</strong>
+                  </div>
+                  {selectedInvoice.cashDiscountEnabled && (
+                    <>
+                      <div className="flex justify-between gap-4 text-green-700 dark:text-green-300">
+                        <span>Skonto ({selectedInvoice.cashDiscountPercent}%)</span>
+                        <span>−{euro.format(selectedInvoice.grossAmount - selectedInvoice.discountedAmount)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4 border-t border-gray-200 pt-2 font-bold dark:border-gray-700">
+                        <span>Zahlbetrag mit Skonto</span>
+                        <span>{euro.format(selectedInvoice.discountedAmount)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </DialogContent>
 
               <DialogActions className="border-t pt-3 mt-4 flex justify-between">
                 <Button
                   appearance="secondary"
-                  icon={<ArrowDownload20Regular />}
-                  onClick={() => window.print()}
+                  icon={<Open20Regular />}
+                  onClick={() => void openInvoicePdf(selectedInvoice.invoicePath)}
+                  disabled={!selectedInvoice.invoicePath}
                 >
-                  Drucken / PDF
+                  PDF öffnen
                 </Button>
                 <Button appearance="primary" onClick={() => setSelectedInvoice(null)}>
                   Schließen

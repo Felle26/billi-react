@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useDraggable, useDroppable } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { useLocation } from 'react-router-dom';
 import { 
   Button, 
@@ -20,8 +20,8 @@ import {
 } from '@fluentui/react-components';
 import { Delete20Regular, DocumentPdf24Regular, Drag20Regular, Add20Regular, Subtract20Regular } from '@fluentui/react-icons';
 import { db } from '../db';
-import { users, objects, products, objectProducts, invoices, settings } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { users, objects, products, objectProducts, invoices, invoiceItems, settings } from '../db/schema';
 import { Command } from '@tauri-apps/plugin-shell';
 
 type Product = typeof products.$inferSelect;
@@ -63,7 +63,7 @@ function ProductCardContent({ product, customPrice, customQuantity }: { product:
   );
 }
 
-function DraggableProduct({ product, customPrice, customQuantity }: { product: Product; customPrice?: number; customQuantity?: number }) {
+function DraggableProduct({ product, customPrice, customQuantity, onAddProduct }: { product: Product; customPrice?: number; customQuantity?: number; onAddProduct: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `invoice-product-${product.id}` });
 
   return (
@@ -71,6 +71,9 @@ function DraggableProduct({ product, customPrice, customQuantity }: { product: P
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={(event) => {
+        if (event.detail === 2) onAddProduct();
+      }}
       className={`relative h-24 cursor-grab overflow-hidden rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-all hover:border-blue-400 active:cursor-grabbing dark:border-gray-700 dark:bg-gray-800 ${isDragging ? 'opacity-30' : ''}`}
     >
       <ProductCardContent product={product} customPrice={customPrice} customQuantity={customQuantity} />
@@ -93,6 +96,7 @@ function InvoiceItemsDropZone({ children }: { children: React.ReactNode }) {
 
 export default function InvoicePage() {
   const location = useLocation();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const invoiceContext = location.state as { objectId?: number; userId?: number } | null;
   // Stammdaten aus der DB
   const [clientList, setClientList] = useState<any[]>([]);
@@ -104,7 +108,7 @@ export default function InvoicePage() {
   // Formulardaten für die Rechnung
   const [selectedUserId, setSelectedUserId] = useState<string>(invoiceContext?.userId?.toString() || '');
   const [selectedObjectId, setSelectedObjectId] = useState<string>(invoiceContext?.objectId?.toString() || '');
-  const [invoiceId, setInvoiceId] = useState('RE-2026-001');
+  const [invoiceNumber, setInvoiceNumber] = useState(1);
   const [isCashDiscountEnabled, setIsCashDiscountEnabled] = useState(false);
   const [cashDiscountPercent] = useState(2);
   const [cashDiscountDays] = useState(10);
@@ -140,7 +144,9 @@ export default function InvoicePage() {
 
         setClientList(clients);
         setProductList(prods);
-        setSettingsData(savedSettings[0] ?? null);
+        const loadedSettings = savedSettings[0] ?? null;
+        setSettingsData(loadedSettings);
+        setInvoiceNumber(Math.max(1, Number(loadedSettings?.next_invoice_number ?? 1)));
       } catch (error) {
         console.error("Fehler beim Laden der Basisdaten:", error);
       }
@@ -293,10 +299,10 @@ export default function InvoicePage() {
 
   const draggedProduct = activeProductId ? allProducts.find(p => p.id.toString() === activeProductId) : undefined;
 
-  // Summen berechnen
-  const netTotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-  const vatTotal = netTotal * 0.19; // 19% MwSt.
-  const grossTotal = netTotal + vatTotal;
+  // Summen berechnen; Positionspreise werden im Dialog als Bruttopreise eingegeben.
+  const grossTotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const netTotal = grossTotal / 1.19;
+  const vatTotal = grossTotal - netTotal;
   const cashDiscountAmount = isCashDiscountEnabled ? grossTotal * (cashDiscountPercent / 100) : 0;
   const payableTotal = grossTotal - cashDiscountAmount;
 
@@ -323,6 +329,13 @@ export default function InvoicePage() {
       }
 
       const configuredSettings = settingsData ?? ((await db.select().from(settings).where(eq(settings.id, 1)))[0] ?? null);
+      const currentInvoiceNumber = Math.max(1, Number(configuredSettings?.next_invoice_number ?? invoiceNumber));
+      const generatedInvoiceId = `RE-${new Date().getFullYear()}-${String(currentInvoiceNumber).padStart(3, '0')}`;
+      const issueDate = new Date();
+      const issueDateValue = `${issueDate.getFullYear()}-${String(issueDate.getMonth() + 1).padStart(2, '0')}-${String(issueDate.getDate()).padStart(2, '0')}`;
+      const dueDate = new Date(issueDate);
+      dueDate.setDate(dueDate.getDate() + 14);
+      const dueDateValue = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
       const invoiceOutputDir = configuredSettings?.invoice_path?.trim() || '';
       const seller = {
         company: configuredSettings?.company_name || '',
@@ -333,12 +346,17 @@ export default function InvoicePage() {
         email: configuredSettings?.email || '',
         fon: configuredSettings?.phone || '',
         tax_id: configuredSettings?.tax_id || '',
+        taxNumber: configuredSettings?.tax_number || configuredSettings?.tax_id || '',
+        vatId: configuredSettings?.vat_id || '',
+        bank: configuredSettings?.bank || '',
+        iban: configuredSettings?.iban || '',
+        bic: configuredSettings?.bic || '',
         invoice_path: invoiceOutputDir,
         logo_path: configuredSettings?.logo_path || '',
       };
 
       const payload = {
-        invoiceId: invoiceId,
+        invoiceId: generatedInvoiceId,
         netTotal: netTotal,
         isCashDiscountEnabled,
         grossTotal: payableTotal,
@@ -356,7 +374,7 @@ export default function InvoicePage() {
           name: item.name,
           description: item.info || item.name,
           quantity: item.quantity,
-          price: item.price,
+          price: item.price / 1.19,
           unit: item.unit,
         }))
       };
@@ -378,12 +396,37 @@ export default function InvoicePage() {
       }
 
       if (output.code === 0 && response?.status === 'success') {
-        await db.insert(invoices).values({
+        const savedInvoice = await db.insert(invoices).values({
+          invoice_number: generatedInvoiceId,
+          created_at: issueDate,
+          updated_at: issueDate,
+          issue_date: issueDateValue,
+          due_date: dueDateValue,
+          vat_total: vatTotal,
+          gross_total: grossTotal,
+          cash_discount_enabled: isCashDiscountEnabled ? 1 : 0,
+          cash_discount_percent: isCashDiscountEnabled ? cashDiscountPercent : 0,
+          payable_total: payableTotal,
           user_id: client.id,
           object_id: obj.id,
           invoice_path: response.document_path || '',
           total: netTotal,
-        });
+        }).returning({ id: invoices.id });
+        const savedInvoiceId = savedInvoice[0]?.id;
+        if (savedInvoiceId && items.length > 0) {
+          await db.insert(invoiceItems).values(items.map((item) => ({
+            invoice_id: savedInvoiceId,
+            product_id: Number(item.productId) > 0 ? Number(item.productId) : null,
+            product_name: item.name,
+            quantity: item.quantity,
+            price_at_time: item.price,
+          })));
+        }
+        await db.update(settings)
+          .set({ next_invoice_number: currentInvoiceNumber + 1 })
+          .where(eq(settings.id, 1));
+        setInvoiceNumber(currentInvoiceNumber + 1);
+        setSettingsData((previous: any) => previous ? { ...previous, next_invoice_number: currentInvoiceNumber + 1 } : previous);
         setStatusMessage(`Erfolgreich gespeichert unter: ${response.document_path || 'unbekanntem Pfad'}`);
       } else {
         setStatusMessage(`Fehler: ${response?.message || output.stderr || `Sidecar beendet mit Code ${output.code ?? 'unbekannt'}`}`);
@@ -397,7 +440,7 @@ export default function InvoicePage() {
   }
 
   return (
-    <DndContext onDragStart={handleProductDragStart} onDragEnd={handleProductDrop}>
+    <DndContext sensors={sensors} onDragStart={handleProductDragStart} onDragEnd={handleProductDrop}>
       <div className="flex min-h-0 flex-1 flex-col items-center overflow-hidden">
         <div className="flex min-h-0 w-full max-w-full flex-1 flex-col gap-2 overflow-hidden">
 
@@ -405,13 +448,9 @@ export default function InvoicePage() {
         <div className="grid grid-cols-1 gap-2 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 shrink-0 md:grid-cols-3">
           <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-3 dark:border-gray-700 md:col-span-3">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Neue Rechnung erstellen</h2>
-            <Input
-              value={invoiceId}
-              autoComplete="off"
-              onChange={(e) => setInvoiceId(e.target.value)}
-              placeholder="Rechnungsnummer"
-              className="w-44"
-            />
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              Rechnungsnummer: <strong>RE-{new Date().getFullYear()}-{String(invoiceNumber).padStart(3, '0')}</strong>
+            </span>
           </div>
           <div className="flex flex-col gap-2">
             <Field label="Kunde auswählen" required>
@@ -433,6 +472,7 @@ export default function InvoicePage() {
               <Combobox 
                 placeholder="Objekt wählen..."
                 disabled={!selectedUserId}
+                autoComplete="off"
                 value={objectList.find(obj => obj.id.toString() === selectedObjectId) ? `${objectList.find(obj => obj.id.toString() === selectedObjectId)?.name} (${objectList.find(obj => obj.id.toString() === selectedObjectId)?.street}, ${objectList.find(obj => obj.id.toString() === selectedObjectId)?.city})` : ''}
                 onOptionSelect={(_e, data) => {
                   setSelectedObjectId(data.optionValue || '');
@@ -509,7 +549,7 @@ export default function InvoicePage() {
                   Standard
                 </Button>
               </div>
-              <p className="text-xs text-gray-500 shrink-0">Produkt auf die Rechnung ziehen</p>
+              <p className="text-xs text-gray-500 shrink-0">Doppelklick oder Produkt auf die Rechnung ziehen</p>
               <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto no-scrollbar pr-1">
                 {allProducts.map(product => {
                     const customPricing = customerPricing[product.id];
@@ -519,6 +559,7 @@ export default function InvoicePage() {
                         product={product}
                         customPrice={customPricing?.custom_price}
                         customQuantity={customPricing?.custom_quantity}
+                        onAddProduct={() => handleAddProduct(product.id.toString())}
                       />
                     );
                   })}

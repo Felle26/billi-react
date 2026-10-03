@@ -89,8 +89,8 @@ export const customerProducts = sqliteTable("customer_products", {
     .notNull()
     .references(() => users.id),
   product_id: integer("product_id")
-    .notNull()
     .references(() => products.id),
+  product_name: text("product_name").notNull().default(""),
   custom_price: real("custom_price").notNull(),
   custom_quantity: real("custom_quantity").notNull().default(0),
   sort_order: integer("sort_order").default(0),
@@ -133,6 +133,15 @@ export const objectProductsRelations = relations(objectProducts, ({ one }) => ({
 
 export const invoices = sqliteTable("invoices", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  invoice_number: text("invoice_number").notNull().default(""),
+  status: text("status").notNull().default("Offen"),
+  vat_total: real("vat_total").notNull().default(0),
+  gross_total: real("gross_total").notNull().default(0),
+  cash_discount_enabled: integer("cash_discount_enabled").notNull().default(0),
+  cash_discount_percent: real("cash_discount_percent").notNull().default(0),
+  payable_total: real("payable_total").notNull().default(0),
+  issue_date: text("issue_date").notNull().default(""),
+  due_date: text("due_date").notNull().default(""),
   user_id: integer("user_id")
     .notNull()
     .references(() => users.id),
@@ -168,8 +177,8 @@ export const invoiceItems = sqliteTable("invoice_items", {
     .notNull()
     .references(() => invoices.id),
   product_id: integer("product_id")
-    .notNull()
     .references(() => products.id),
+  product_name: text("product_name").notNull().default(""),
   quantity: real("quantity").notNull().default(1),
   // Friert den Preis ein, falls sich der Produktpreis in der products-Tabelle später ändert
   price_at_time: real("price_at_time").notNull(),
@@ -208,9 +217,15 @@ export const settings = sqliteTable("settings", {
   phone: text("phone").default(""),
   email: text("email").default(""),
   tax_id: text("tax_id").default(""), // Steuernummer
+  tax_number: text("tax_number").default(""),
+  vat_id: text("vat_id").default(""),
+  bank: text("bank").default(""),
+  iban: text("iban").default(""),
+  bic: text("bic").default(""),
 
   // Speicherpfade
   backup_path: text("backup_path").default(""),
   invoice_path: text("invoice_path").default(""),
   logo_path: text("logo_path").default(""),
+  next_invoice_number: integer("next_invoice_number").notNull().default(1),
 });

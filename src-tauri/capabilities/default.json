@@ -8,6 +8,8 @@
   "permissions": [
     "core:default",
     "dialog:default",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
@@ -16,11 +18,18 @@
     "shell:default",
     {
       "identifier": "shell:allow-execute",
-      "allow":[{ 
+      "allow":[
+        {
         "name": "bin/zugferd",
         "sidecar": true,
         "args": true
-      }]
+        },
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": true
+        }
+      ]
     }
   ]
 }

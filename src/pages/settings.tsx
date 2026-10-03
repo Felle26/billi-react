@@ -27,9 +27,15 @@ export default function Settings() {
     phone: '',
     email: '',
     tax_id: '',
+    tax_number: '',
+    vat_id: '',
+    bank: '',
+    iban: '',
+    bic: '',
     backup_path: '',
     invoice_path: '',
-    logo_path: ''
+    logo_path: '',
+    next_invoice_number: 1,
   });
 
   // Lädt die Einstellungen beim Öffnen der Seite
@@ -53,7 +59,7 @@ export default function Settings() {
   }, []);
 
   // Aktualisiert den lokalen State bei Eingaben
-  const handleChange = (field: string, value: string) => {
+  const handleChange = (field: string, value: string | number) => {
     setConfig(prev => ({ ...prev, [field]: value }));
   };
 
@@ -158,9 +164,43 @@ export default function Settings() {
               <Input type="email" value={config.email} onChange={(e) => handleChange('email', e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
-              <Label>Steuernummer / USt-IdNr.</Label>
-              <Input value={config.tax_id} onChange={(e) => handleChange('tax_id', e.target.value)} />
+              <Label>Steuernummer</Label>
+              <Input value={config.tax_number} onChange={(e) => handleChange('tax_number', e.target.value)} />
             </div>
+            <div className="flex flex-col gap-1">
+              <Label>USt-IdNr.</Label>
+              <Input value={config.vat_id} onChange={(e) => handleChange('vat_id', e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label>Bank</Label>
+              <Input value={config.bank} onChange={(e) => handleChange('bank', e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label>IBAN</Label>
+              <Input value={config.iban} onChange={(e) => handleChange('iban', e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label>BIC</Label>
+              <Input value={config.bic} onChange={(e) => handleChange('bic', e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div>
+          <h3 className="text-lg font-medium mb-4 text-gray-800 dark:text-gray-200">Rechnungsnummer</h3>
+          <div className="flex max-w-sm flex-col gap-1">
+            <Label>Nummer der nächsten Rechnung</Label>
+            <Input
+              type="number"
+              min={1}
+              value={String(config.next_invoice_number)}
+              onChange={(e) => handleChange('next_invoice_number', e.target.value === '' ? 1 : Number(e.target.value))}
+            />
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Diese Nummer wird bei der Rechnungserstellung verwendet und danach automatisch erhöht.
+            </span>
           </div>
         </div>
 

@@ -57,6 +57,42 @@ pub fn run() {
             sql: include_str!("../../drizzle/0007_add_invoice_total.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "add_invoice_number",
+            sql: include_str!("../../drizzle/0008_add_invoice_number.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "snapshot_invoice_item_products",
+            sql: include_str!("../../drizzle/0009_snapshot_invoice_item_products.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "add_invoice_status",
+            sql: include_str!("../../drizzle/0010_add_invoice_status.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "add_invoice_price_breakdown",
+            sql: include_str!("../../drizzle/0011_add_invoice_price_breakdown.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "add_invoice_dates",
+            sql: include_str!("../../drizzle/0012_add_invoice_dates.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "add_seller_payment_details",
+            sql: include_str!("../../drizzle/0013_add_seller_payment_details.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
