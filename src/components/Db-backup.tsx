@@ -1,56 +1,64 @@
-import { save } from '@tauri-apps/plugin-dialog';
-import { sql } from 'drizzle-orm';
+import { useState } from 'react';
 import { Button } from '@fluentui/react-components';
+import { save } from '@tauri-apps/plugin-dialog';
+import { getSqliteDatabase } from '../db';
 
-// WICHTIG: Du musst hier deine konfigurierte Drizzle-Datenbank importieren.
-// Passe den Pfad '../db' an, je nachdem wo deine db.ts oder index.ts von Drizzle liegt!
-import { db } from '../db/index';
+interface DbBackupProps {
+  backupDirectory: string;
+}
 
-export function DbBackup() {
-  
-  // 1. Die eigentliche Datenbank-Funktion
-  async function createDatabaseBackup(destinationPath: string) {
+export function DbBackup({ backupDirectory }: DbBackupProps) {
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
+  const [backupError, setBackupError] = useState(false);
+
+  async function handleBackup() {
+    setBackupError(false);
+    setBackupMessage('');
+    setIsBackingUp(true);
+
     try {
-      // Windows-Pfade sicher machen
-      const safePath = destinationPath.replace(/\\/g, '/');
-      
-      // Führt den Backup-Befehl aus
-      await db.run(sql.raw(`VACUUM INTO '${safePath}'`));
-      
-      console.log("Backup erfolgreich an:", safePath);
-      alert("Backup wurde erfolgreich erstellt!"); // Hier später gerne durch einen schönen Toast ersetzen
-      
+      const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
+      const fileName = `billi-backup-${timestamp}.db`;
+      const trimmedDirectory = backupDirectory.trim().replace(/[\\/]+$/, '');
+      const separator = backupDirectory.includes('\\') ? '\\' : '/';
+      const backupPath = await save({
+        filters: [{ name: 'SQLite Datenbank', extensions: ['db', 'sqlite'] }],
+        defaultPath: trimmedDirectory
+          ? `${trimmedDirectory}${separator}${fileName}`
+          : fileName,
+      });
+
+      if (!backupPath) return;
+
+      const sqlite = await getSqliteDatabase();
+      const escapedBackupPath = backupPath.replace(/'/g, "''");
+      await sqlite.execute(`VACUUM INTO '${escapedBackupPath}'`);
+      setBackupMessage(`Backup erfolgreich erstellt: ${backupPath}`);
     } catch (error) {
-      console.error("Fehler beim Backup:", error);
-      alert("Es gab einen Fehler beim Erstellen des Backups.");
+      console.error('Fehler beim Erstellen des Datenbank-Backups:', error);
+      setBackupError(true);
+      setBackupMessage(
+        `Backup konnte nicht erstellt werden: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setIsBackingUp(false);
     }
   }
 
-  // 2. Die Handler-Funktion für den Button
-  async function handleBackup() {
-    // Öffnet den nativen Speichern-Dialog
-    const backupPath = await save({
-      filters: [{
-        name: 'SQLite Datenbank',
-        extensions: ['db', 'sqlite']
-      }],
-      defaultPath: 'rechnungen_backup.db',
-    });
-
-    // Wenn der Nutzer abbrechen klickt, ist backupPath null
-    if (!backupPath) return;
-
-    // Pfad an die Datenbank übergeben
-    await createDatabaseBackup(backupPath);
-  }
-
-  // 3. Das UI-Element (Button)
   return (
-    <Button 
-      onClick={handleBackup} 
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-    >
-      Datenbank Backup erstellen
-    </Button>
+    <div className="flex flex-col items-start gap-2">
+      <Button appearance="secondary" onClick={handleBackup} disabled={isBackingUp}>
+        {isBackingUp ? 'Backup wird erstellt…' : 'Datenbank-Backup erstellen'}
+      </Button>
+      {backupMessage && (
+        <p
+          role={backupError ? 'alert' : 'status'}
+          className={backupError ? 'text-sm text-red-600' : 'text-sm text-green-700'}
+        >
+          {backupMessage}
+        </p>
+      )}
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import App from "./App";
 import { Header } from "./components/Header.tsx";
 import { Footer } from "./components/Footer.tsx";
 import { HashRouter } from "react-router-dom";
+import { DatabaseGate } from "./components/DatabaseGate";
 
 import "./App.css";
 
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <AppThemeProvider>
       <div className="flex h-screen w-full flex-col overflow-hidden">
+      <DatabaseGate>
       <HashRouter>
           <Header />
           <div className="flex min-h-0 grow flex-col overflow-hidden">
@@ -20,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         </div>
         <Footer />
       </HashRouter>
+      </DatabaseGate>
       </div>
     </AppThemeProvider>
   </React.StrictMode>,

@@ -1,21 +1,111 @@
 // src/pages/settings.tsx
 import { useState, useEffect } from 'react';
-import { db } from '../db';
+import { db, activatePostgres, deactivatePostgres, isPostgresActive, loadConnectionSettings } from '../db';
+import { getLicenseState, loadLicense, saveLicense } from '../db/license';
 import { settings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { 
   Input, 
   Button, 
   Label, 
   Divider, 
-  Spinner 
+  Spinner,
+  Checkbox,
 } from '@fluentui/react-components';
 import { FolderOpen20Regular, Save20Regular } from '@fluentui/react-icons';
+import { DbBackup } from '../components/Db-backup';
+
+interface PostgresConnectionSettings {
+  host: string;
+  port: string;
+  database: string;
+  username: string;
+  password: string;
+}
+
+interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+}
+
+function getErrorMessage(error: unknown, password: string) {
+  const message = error instanceof Error ? error.message : String(error);
+  return password ? message.split(password).join('[ausgeblendet]') : message;
+}
 
 export default function Settings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTestingPostgres, setIsTestingPostgres] = useState(false);
+  const [postgresConnection, setPostgresConnection] = useState<PostgresConnectionSettings>({
+    host: '',
+    port: '5432',
+    database: '',
+    username: '',
+    password: '',
+  });
+  const [connectionTestResult, setConnectionTestResult] = useState<ConnectionTestResult | null>(null);
+  const [postgresActiveNow, setPostgresActiveNow] = useState(isPostgresActive());
+  const [hasStoredConnection, setHasStoredConnection] = useState(false);
+  const [importLocalData, setImportLocalData] = useState(true);
+  const [isSwitchingBackend, setIsSwitchingBackend] = useState(false);
+  const [backendResult, setBackendResult] = useState<ConnectionTestResult | null>(null);
+  const [serialNumber, setSerialNumber] = useState('');
+  const [licenseExpiry, setLicenseExpiry] = useState('');
+  const [licenseMessage, setLicenseMessage] = useState<ConnectionTestResult | null>(null);
+
+  useEffect(() => {
+    loadLicense()
+      .then((license) => {
+        setSerialNumber(license.serialNumber);
+        setLicenseExpiry(license.expiresAt);
+      })
+      .catch((error) => console.error('Lizenz konnte nicht geladen werden:', error));
+  }, []);
+
+  const handleSaveLicense = async () => {
+    try {
+      await saveLicense({ serialNumber, expiresAt: licenseExpiry });
+      const state = getLicenseState({ serialNumber, expiresAt: licenseExpiry });
+      setLicenseMessage({
+        success: state === 'valid',
+        message:
+          state === 'valid'
+            ? 'Lizenz gespeichert.'
+            : state === 'expired'
+              ? 'Lizenz gespeichert, ist aber abgelaufen.'
+              : 'Keine Seriennummer eingegeben.',
+      });
+    } catch (error) {
+      setLicenseMessage({ success: false, message: `Speichern fehlgeschlagen: ${getErrorMessage(error, '')}` });
+    }
+  };
+
+  useEffect(() => {
+    async function loadStoredConnection() {
+      try {
+        const stored = await loadConnectionSettings();
+        if (!stored.encryptedConfig) return;
+        const saved = await invoke<{ host: string; port: number; database: string; username: string }>(
+          'pg_describe_config',
+          { blob: stored.encryptedConfig },
+        );
+        setHasStoredConnection(true);
+        setPostgresConnection((current) => ({
+          ...current,
+          host: saved.host,
+          port: String(saved.port),
+          database: saved.database,
+          username: saved.username,
+        }));
+      } catch (error) {
+        console.error('Gespeicherte Verbindungsdaten nicht lesbar:', error);
+      }
+    }
+    loadStoredConnection();
+  }, []);
   
   // State für alle Einstellungen
   const [config, setConfig] = useState({
@@ -106,6 +196,104 @@ export default function Settings() {
       }
     } catch (error) {
       console.error("Fehler bei der Logoauswahl:", error);
+    }
+  };
+
+  const testPostgresConnection = async () => {
+    setConnectionTestResult(null);
+    setIsTestingPostgres(true);
+
+    try {
+      const host = postgresConnection.host.trim();
+      const databaseName = postgresConnection.database.trim();
+      const username = postgresConnection.username.trim();
+      const port = Number(postgresConnection.port);
+
+      if (!host || !databaseName || !username || !postgresConnection.password) {
+        throw new Error('Bitte Host, Datenbank, Benutzername und Passwort eingeben.');
+      }
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('Der Port muss eine Zahl zwischen 1 und 65535 sein.');
+      }
+
+      await invoke('test_postgres_connection', {
+        host,
+        port,
+        database: databaseName,
+        username,
+        password: postgresConnection.password,
+      });
+
+      setConnectionTestResult({
+        success: true,
+        message: 'Verbindung erfolgreich: Anmeldung und SQL-Testabfrage waren erfolgreich.',
+      });
+    } catch (error) {
+      console.error('PostgreSQL-Verbindungstest fehlgeschlagen:', error);
+      setConnectionTestResult({
+        success: false,
+        message: `Verbindung fehlgeschlagen: ${getErrorMessage(error, postgresConnection.password)}`,
+      });
+    } finally {
+      setIsTestingPostgres(false);
+    }
+  };
+
+  const activateBackend = async () => {
+    setBackendResult(null);
+    setIsSwitchingBackend(true);
+    try {
+      const port = Number(postgresConnection.port);
+      if (
+        !postgresConnection.host.trim() ||
+        !postgresConnection.database.trim() ||
+        !postgresConnection.username.trim() ||
+        !postgresConnection.password
+      ) {
+        throw new Error('Bitte Host, Datenbank, Benutzername und Passwort eingeben.');
+      }
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('Der Port muss eine Zahl zwischen 1 und 65535 sein.');
+      }
+
+      const info = await activatePostgres(
+        {
+          host: postgresConnection.host.trim(),
+          port,
+          database: postgresConnection.database.trim(),
+          username: postgresConnection.username.trim(),
+          password: postgresConnection.password,
+        },
+        { importLocalData },
+      );
+      setPostgresActiveNow(true);
+      setHasStoredConnection(true);
+      setPostgresConnection((current) => ({ ...current, password: '' }));
+      setBackendResult({
+        success: true,
+        message: `PostgreSQL ist jetzt aktiv. Die Verbindungsdaten wurden verschlüsselt gespeichert. ${info}`.trim(),
+      });
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      console.error('PostgreSQL konnte nicht aktiviert werden:', error);
+      setBackendResult({
+        success: false,
+        message: `Aktivierung fehlgeschlagen: ${getErrorMessage(error, postgresConnection.password)}`,
+      });
+    } finally {
+      setIsSwitchingBackend(false);
+    }
+  };
+
+  const deactivateBackend = async () => {
+    setBackendResult(null);
+    setIsSwitchingBackend(true);
+    try {
+      await deactivatePostgres();
+      window.location.reload();
+    } catch (error) {
+      setBackendResult({ success: false, message: `Umschalten fehlgeschlagen: ${getErrorMessage(error, '')}` });
+      setIsSwitchingBackend(false);
     }
   };
 
@@ -259,6 +447,7 @@ export default function Settings() {
                   Durchsuchen
                 </Button>
               </div>
+              <DbBackup backupDirectory={config.backup_path} />
             </div>
             
             <div className="flex flex-col gap-1 mt-2">
@@ -267,6 +456,161 @@ export default function Settings() {
                 Wird von Tauri automatisch im gesicherten AppData-Ordner verwaltet (%appdata%).
               </span>
             </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div>
+          <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">
+            PostgreSQL-Datenbank im Netzwerk
+          </h3>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Aktuell verwendet: <strong>{postgresActiveNow ? 'PostgreSQL' : 'lokale SQLite-Datenbank'}</strong>.
+            Ist PostgreSQL aktiviert, werden alle Daten dort gespeichert. Die Verbindungsdaten
+            werden verschlüsselt (AES-256-GCM, Schlüssel im Windows-Anmeldeinformationsspeicher)
+            in der lokalen SQLite-Datenbank abgelegt.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="postgres-host">Server / Hostname</Label>
+              <Input
+                id="postgres-host"
+                autoComplete="off"
+                placeholder="z. B. 192.168.1.10"
+                value={postgresConnection.host}
+                onChange={(event) => setPostgresConnection((current) => ({ ...current, host: event.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="postgres-port">Port</Label>
+              <Input
+                id="postgres-port"
+                type="number"
+                min={1}
+                max={65535}
+                value={postgresConnection.port}
+                onChange={(event) => setPostgresConnection((current) => ({ ...current, port: event.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="postgres-database">Datenbank</Label>
+              <Input
+                id="postgres-database"
+                autoComplete="off"
+                value={postgresConnection.database}
+                onChange={(event) => setPostgresConnection((current) => ({ ...current, database: event.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="postgres-username">Benutzername</Label>
+              <Input
+                id="postgres-username"
+                autoComplete="off"
+                value={postgresConnection.username}
+                onChange={(event) => setPostgresConnection((current) => ({ ...current, username: event.target.value }))}
+              />
+            </div>
+            <div className="col-span-2 flex flex-col gap-1">
+              <Label htmlFor="postgres-password">Passwort</Label>
+              <Input
+                id="postgres-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={hasStoredConnection ? 'Gespeichert – zum Ändern neu eingeben' : ''}
+                value={postgresConnection.password}
+                onChange={(event) => setPostgresConnection((current) => ({ ...current, password: event.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col items-start gap-2">
+            <Checkbox
+              checked={importLocalData}
+              onChange={(_, data) => setImportLocalData(Boolean(data.checked))}
+              label="Lokale Daten übernehmen (nur wenn die PostgreSQL-Datenbank leer ist)"
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                appearance="primary"
+                onClick={activateBackend}
+                disabled={isSwitchingBackend}
+                icon={isSwitchingBackend ? <Spinner size="tiny" /> : undefined}
+              >
+                {postgresActiveNow ? 'Verbindung aktualisieren' : 'Speichern & PostgreSQL aktivieren'}
+              </Button>
+              {postgresActiveNow && (
+                <Button appearance="secondary" onClick={deactivateBackend} disabled={isSwitchingBackend}>
+                  Zurück zur lokalen SQLite-Datenbank
+                </Button>
+              )}
+            </div>
+            {backendResult && (
+              <p
+                role={backendResult.success ? 'status' : 'alert'}
+                className={backendResult.success ? 'text-sm text-green-700' : 'text-sm text-red-600'}
+              >
+                {backendResult.message}
+              </p>
+            )}
+          </div>
+          <div className="mt-4 flex flex-col items-start gap-2">
+            <Button
+              appearance="secondary"
+              onClick={testPostgresConnection}
+              disabled={isTestingPostgres}
+              icon={isTestingPostgres ? <Spinner size="tiny" /> : undefined}
+            >
+              {isTestingPostgres ? 'Verbindung wird geprüft…' : 'PostgreSQL-Verbindung testen'}
+            </Button>
+            {connectionTestResult && (
+              <p
+                role={connectionTestResult.success ? 'status' : 'alert'}
+                className={connectionTestResult.success ? 'text-sm text-green-700' : 'text-sm text-red-600'}
+              >
+                {connectionTestResult.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <Divider />
+
+        <div>
+          <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Lizenz</h3>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Die Seriennummer wird derzeit nur lokal gespeichert und nicht online geprüft.
+            Der Status wird im Footer angezeigt.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="license-serial">Seriennummer</Label>
+              <Input
+                id="license-serial"
+                autoComplete="off"
+                value={serialNumber}
+                onChange={(event) => setSerialNumber(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="license-expiry">Gültig bis (leer = unbefristet)</Label>
+              <Input
+                id="license-expiry"
+                type="date"
+                value={licenseExpiry}
+                onChange={(event) => setLicenseExpiry(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col items-start gap-2">
+            <Button appearance="primary" onClick={handleSaveLicense}>Lizenz speichern</Button>
+            {licenseMessage && (
+              <p
+                role={licenseMessage.success ? 'status' : 'alert'}
+                className={licenseMessage.success ? 'text-sm text-green-700' : 'text-sm text-red-600'}
+              >
+                {licenseMessage.message}
+              </p>
+            )}
           </div>
         </div>
 

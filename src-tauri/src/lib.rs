@@ -4,6 +4,45 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+async fn test_postgres_connection(
+    host: String,
+    port: u16,
+    database: String,
+    username: String,
+    password: String,
+) -> Result<(), String> {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use std::time::Duration;
+
+    let options = PgConnectOptions::new()
+        .host(&host)
+        .port(port)
+        .database(&database)
+        .username(&username)
+        .password(&password);
+
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .acquire_timeout(Duration::from_secs(8))
+        .connect_with(options)
+        .await
+        .map_err(|error| format!("Verbindung oder Anmeldung fehlgeschlagen: {error}"))?;
+
+    let query_result = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&pool)
+        .await;
+    pool.close().await;
+
+    match query_result {
+        Ok(1) => Ok(()),
+        Ok(_) => Err("Der PostgreSQL-Server lieferte ein unerwartetes Ergebnis.".into()),
+        Err(error) => Err(format!("SQL-Testabfrage fehlgeschlagen: {error}")),
+    }
+}
+
+mod pg;
+
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -93,9 +132,22 @@ pub fn run() {
             sql: include_str!("../../drizzle/0013_add_seller_payment_details.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 15,
+            description: "add_connection_settings",
+            sql: include_str!("../../drizzle/0014_add_connection_settings.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 16,
+            description: "add_license_settings",
+            sql: include_str!("../../drizzle/0015_add_license_settings.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
+        .manage(pg::PgState::default())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -104,7 +156,17 @@ pub fn run() {
                 .add_migrations("sqlite:sqlite.db", migrations)
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            test_postgres_connection,
+            pg::pg_encrypt_config,
+            pg::pg_describe_config,
+            pg::pg_connect,
+            pg::pg_connect_encrypted,
+            pg::pg_disconnect,
+            pg::pg_execute,
+            pg::pg_select
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
