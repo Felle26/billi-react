@@ -123,6 +123,8 @@ export default function InvoicePage() {
     originalUnit: string;
     quantity: number;
     price: number;
+    aditionalQuantity: number | null;
+    aditionalPrice: number | null;
     unit: string;
     expanded: boolean;
   }>>([]);
@@ -266,6 +268,8 @@ export default function InvoicePage() {
         originalUnit: prod.product_unit || 'Stk.',
         quantity: originalQuantity,
         price: originalPrice,
+        aditionalQuantity: null,
+        aditionalPrice: null,
         unit: prod.product_unit || 'Stk.',
         expanded: false,
       }
@@ -273,8 +277,11 @@ export default function InvoicePage() {
   };
 
   // Bezeichnung, Information, Menge oder Preis einer Position ändern
-  const handleItemChange = (index: number, field: 'name' | 'info' | 'quantity' | 'price' | 'unit', value: string) => {
-    const parsedValue = field === 'quantity' || field === 'price' ? Number(value) : value;
+  const handleItemChange = (index: number, field: 'name' | 'info' | 'quantity' | 'price' | 'aditionalQuantity' | 'aditionalPrice' | 'unit', value: string) => {
+    const isNumericField = field === 'quantity' || field === 'price' || field === 'aditionalQuantity' || field === 'aditionalPrice';
+    const parsedValue = isNumericField
+      ? (field === 'aditionalQuantity' || field === 'aditionalPrice') && value.trim() === '' ? null : Number(value)
+      : value;
     setItems(prev => prev.map((item, i) => (i === index ? { ...item, [field]: parsedValue } : item)));
   };
 
@@ -300,7 +307,9 @@ export default function InvoicePage() {
   const draggedProduct = activeProductId ? allProducts.find(p => p.id.toString() === activeProductId) : undefined;
 
   // Summen berechnen; Positionspreise werden im Dialog als Bruttopreise eingegeben.
-  const grossTotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const grossTotal = items.reduce((sum, item) => (
+    sum + ((item.aditionalQuantity ?? item.quantity) * (item.aditionalPrice ?? item.price))
+  ), 0);
   const netTotal = grossTotal / 1.19;
   const vatTotal = grossTotal - netTotal;
   const cashDiscountAmount = isCashDiscountEnabled ? grossTotal * (cashDiscountPercent / 100) : 0;
@@ -341,42 +350,67 @@ export default function InvoicePage() {
         company: configuredSettings?.company_name || '',
         name: configuredSettings?.owner_name || '',
         street: configuredSettings?.street || '',
+        number: '',
         zip: configuredSettings?.zip || '',
         city: configuredSettings?.city || '',
         email: configuredSettings?.email || '',
         fon: configuredSettings?.phone || '',
         tax_id: configuredSettings?.tax_id || '',
-        taxNumber: configuredSettings?.tax_number || configuredSettings?.tax_id || '',
-        vatId: configuredSettings?.vat_id || '',
+        tax_number: configuredSettings?.tax_number || configuredSettings?.tax_id || '',
+        vat_id: configuredSettings?.vat_id || '',
         bank: configuredSettings?.bank || '',
         iban: configuredSettings?.iban || '',
         bic: configuredSettings?.bic || '',
-        invoice_path: invoiceOutputDir,
         logo_path: configuredSettings?.logo_path || '',
       };
+      const outputPath = invoiceOutputDir
+        ? `${invoiceOutputDir.replace(/[\\/]+$/, '')}/${generatedInvoiceId}.pdf`
+        : `${generatedInvoiceId}.pdf`;
 
       const payload = {
         invoiceId: generatedInvoiceId,
-        netTotal: netTotal,
-        isCashDiscountEnabled,
+        netTotal,
         grossTotal: payableTotal,
         grossTotalBeforeCashDiscount: grossTotal,
+        isCashDiscountEnabled,
         cashDiscount: isCashDiscountEnabled ? {
           percent: cashDiscountPercent,
           days: cashDiscountDays,
           amount: cashDiscountAmount,
         } : null,
-        client: client,
-        object: obj,
+        client: {
+          company_name: client.company_name || '',
+          first_name: client.first_name || '',
+          last_name: client.last_name || '',
+          street: client.street || '',
+          number: client.number || '',
+          zip: client.zip || '',
+          city: client.city || '',
+          country: client.country || 'DE',
+          email: client.email || '',
+        },
+        object: {
+          name: obj.name,
+          order_number: obj.order_number || String(obj.id),
+        },
         seller,
-        output_dir: invoiceOutputDir,
-        items: items.map((item) => ({
-          name: item.name,
-          description: item.info || item.name,
-          quantity: item.quantity,
-          price: item.price / 1.19,
-          unit: item.unit,
-        }))
+        output_path: outputPath,
+        items: items.map((item) => {
+          const aditionalQuantity = item.aditionalQuantity;
+          const aditionalPrice = item.aditionalPrice;
+
+          return {
+            name: item.name,
+            description: item.name,
+            aditional_information: item.info,
+            quantity: item.quantity,
+            price: item.price / 1.19,
+            unit: item.unit,
+            aditional_quantity: aditionalQuantity ?? '',
+            aditional_price: aditionalPrice === null ? '' : aditionalPrice / 1.19,
+            aditional_unit: item.unit,
+          };
+        })
       };
 
       // Aufruf unseres kompilierten Node.js-Sidecars über Tauri Shell Plugin
@@ -418,8 +452,8 @@ export default function InvoicePage() {
             invoice_id: savedInvoiceId,
             product_id: Number(item.productId) > 0 ? Number(item.productId) : null,
             product_name: item.name,
-            quantity: item.quantity,
-            price_at_time: item.price,
+            quantity: item.aditionalQuantity ?? item.quantity,
+            price_at_time: item.aditionalPrice ?? item.price,
           })));
         }
         await db.update(settings)
@@ -666,7 +700,7 @@ export default function InvoicePage() {
                               <div className="mt-0.5 text-[9px] text-gray-400">Original: {item.originalPrice.toFixed(2)} €</div>
                             </TableCell>
                             <TableCell className="py-2 pr-2 align-top font-semibold text-sm">
-                              {(item.quantity * item.price).toFixed(2)} €
+                              {((item.aditionalQuantity ?? item.quantity) * (item.aditionalPrice ?? item.price)).toFixed(2)} €
                             </TableCell>
                             <TableCell>
                               <Button 
@@ -713,6 +747,29 @@ export default function InvoicePage() {
                                         value={String(item.price)} 
                                         autoComplete="off"
                                         onChange={(e) => handleItemChange(index, 'price', e.target.value)}
+                                        className="w-24 text-sm"
+                                      />
+                                      <span className="text-sm">€</span>
+                                    </div>
+                                  </Field>
+                                  <Field label="Zusatzmenge (hat Vorrang)" className="min-w-[120px]">
+                                    <Input
+                                      type="number"
+                                      value={item.aditionalQuantity === null ? '' : String(item.aditionalQuantity)}
+                                      autoComplete="off"
+                                      placeholder="Optional"
+                                      onChange={(e) => handleItemChange(index, 'aditionalQuantity', e.target.value)}
+                                      className="w-24 text-sm"
+                                    />
+                                  </Field>
+                                  <Field label="Zusatzpreis (hat Vorrang)" className="min-w-[120px]">
+                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                      <Input
+                                        type="number"
+                                        value={item.aditionalPrice === null ? '' : String(item.aditionalPrice)}
+                                        autoComplete="off"
+                                        placeholder="Optional"
+                                        onChange={(e) => handleItemChange(index, 'aditionalPrice', e.target.value)}
                                         className="w-24 text-sm"
                                       />
                                       <span className="text-sm">€</span>

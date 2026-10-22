@@ -172,7 +172,7 @@ export function LicenseGate({ children }: { children: ReactNode }) {
 
 function CenteredCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--app-background)] px-4 py-10 text-[var(--app-foreground)]">
+    <main className="flex min-h-screen items-center justify-center bg-(--app-background) px-4 py-10 text-(--app-foreground)">
       <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-gray-200 bg-white p-8 text-center shadow-lg dark:border-gray-700 dark:bg-gray-900">
         <h1 className="text-2xl font-semibold">{title}</h1>
         {children}
@@ -246,7 +246,7 @@ function ActivationDialog({ message, trial, initialStep, onCancel, onRetry, onRe
   const trialLabel = trial === 'running' ? 'Testversion fortsetzen' : '14 Tage kostenlos testen';
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--app-background)] px-4 py-10 text-[var(--app-foreground)]">
+    <main className="flex min-h-screen items-center justify-center bg-(--app-background) px-4 py-10 text-(--app-foreground)">
       <div className="w-full max-w-md space-y-5 rounded-xl border border-gray-200 bg-white p-8 shadow-lg dark:border-gray-700 dark:bg-gray-900">
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold">Billi aktivieren</h1>
