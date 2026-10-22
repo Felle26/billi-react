@@ -41,6 +41,8 @@ async fn test_postgres_connection(
     }
 }
 
+mod license;
+mod machine_id;
 mod pg;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -165,7 +167,13 @@ pub fn run() {
             pg::pg_connect_encrypted,
             pg::pg_disconnect,
             pg::pg_execute,
-            pg::pg_select
+            pg::pg_select,
+            license::license_startup,
+            license::license_start_trial,
+            license::license_request_code,
+            license::license_activate,
+            license::license_deactivate,
+            license::license_open_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

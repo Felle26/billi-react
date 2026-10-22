@@ -6,6 +6,7 @@ import { Header } from "./components/Header.tsx";
 import { Footer } from "./components/Footer.tsx";
 import { HashRouter } from "react-router-dom";
 import { DatabaseGate } from "./components/DatabaseGate";
+import { LicenseGate } from "./components/LicenseGate";
 
 import "./App.css";
 
@@ -13,6 +14,7 @@ import "./App.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <AppThemeProvider>
+      <LicenseGate>
       <div className="flex h-screen w-full flex-col overflow-hidden">
       <DatabaseGate>
       <HashRouter>
@@ -24,6 +26,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       </HashRouter>
       </DatabaseGate>
       </div>
+      </LicenseGate>
     </AppThemeProvider>
   </React.StrictMode>,
 );

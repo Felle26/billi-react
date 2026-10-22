@@ -20,13 +20,6 @@ import {
 } from '@fluentui/react-components';
 import { Delete20Regular, DocumentPdf24Regular, Drag20Regular, Add20Regular, Subtract20Regular } from '@fluentui/react-icons';
 import { db } from '../db';
-import { LICENSE_CHANGED_EVENT, getLicenseState, loadLicense, type LicenseState } from '../db/license';
-
-const LICENSE_BLOCK_MESSAGE: Record<LicenseState, string> = {
-  missing: 'Ohne Seriennummer können keine Rechnungen erstellt werden. Bitte in den Einstellungen eine Lizenz eingeben.',
-  expired: 'Die Lizenz ist abgelaufen. Bitte in den Einstellungen eine gültige Lizenz eingeben.',
-  valid: '',
-};
 import { eq } from 'drizzle-orm';
 import { users, objects, products, objectProducts, invoices, invoiceItems, settings } from '../db/schema';
 import { Command } from '@tauri-apps/plugin-shell';
@@ -138,18 +131,6 @@ export default function InvoicePage() {
   const [statusMessage, setStatusMessage] = useState('');
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [showObjectProducts, setShowObjectProducts] = useState(true);
-  const [licenseState, setLicenseState] = useState<LicenseState>('valid');
-
-  useEffect(() => {
-    const refreshLicense = () => {
-      loadLicense()
-        .then((license) => setLicenseState(getLicenseState(license)))
-        .catch(() => setLicenseState('missing'));
-    };
-    refreshLicense();
-    window.addEventListener(LICENSE_CHANGED_EVENT, refreshLicense);
-    return () => window.removeEventListener(LICENSE_CHANGED_EVENT, refreshLicense);
-  }, []);
 
   // Grunddaten beim Start laden (Kunden & Produkte)
   useEffect(() => {
@@ -327,12 +308,6 @@ export default function InvoicePage() {
 
   // 4. Rechnung generieren (Tauri Sidecar aufrufen)
   async function handleGenerateInvoice() {
-    const currentLicenseState = getLicenseState(await loadLicense().catch(() => ({ serialNumber: '', expiresAt: '' })));
-    if (currentLicenseState !== 'valid') {
-      setLicenseState(currentLicenseState);
-      alert(LICENSE_BLOCK_MESSAGE[currentLicenseState]);
-      return;
-    }
     if (!selectedUserId || !selectedObjectId) {
       alert("Bitte wähle einen Kunden und ein Objekt aus.");
       return;
@@ -542,14 +517,11 @@ export default function InvoicePage() {
               size="large"
               icon={<DocumentPdf24Regular />}
               onClick={handleGenerateInvoice}
-              disabled={isLoading || licenseState !== 'valid'}
+              disabled={isLoading}
               className="w-full"
             >
               {isLoading ? <Spinner size="tiny" label="Generiere..." /> : 'Rechnung erstellen'}
             </Button>
-            {licenseState !== 'valid' && (
-              <span role="alert" className="text-xs text-red-600">{LICENSE_BLOCK_MESSAGE[licenseState]}</span>
-            )}
             {statusMessage && <span className="text-xs text-gray-500">{statusMessage}</span>}
           </div>
         </div>

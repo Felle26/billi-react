@@ -1,11 +1,11 @@
 // src/pages/settings.tsx
 import { useState, useEffect } from 'react';
 import { db, activatePostgres, deactivatePostgres, isPostgresActive, loadConnectionSettings } from '../db';
-import { getLicenseState, loadLicense, saveLicense } from '../db/license';
 import { settings } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { licenseTypeLabel, useLicenseStatus } from '../components/LicenseGate';
 import { 
   Input, 
   Button, 
@@ -52,34 +52,24 @@ export default function Settings() {
   const [importLocalData, setImportLocalData] = useState(true);
   const [isSwitchingBackend, setIsSwitchingBackend] = useState(false);
   const [backendResult, setBackendResult] = useState<ConnectionTestResult | null>(null);
-  const [serialNumber, setSerialNumber] = useState('');
-  const [licenseExpiry, setLicenseExpiry] = useState('');
-  const [licenseMessage, setLicenseMessage] = useState<ConnectionTestResult | null>(null);
+  const license = useLicenseStatus();
+  const [isDeactivatingLicense, setIsDeactivatingLicense] = useState(false);
+  const [licenseError, setLicenseError] = useState('');
 
-  useEffect(() => {
-    loadLicense()
-      .then((license) => {
-        setSerialNumber(license.serialNumber);
-        setLicenseExpiry(license.expiresAt);
-      })
-      .catch((error) => console.error('Lizenz konnte nicht geladen werden:', error));
-  }, []);
-
-  const handleSaveLicense = async () => {
+  const handleDeactivateLicense = async () => {
+    if (!window.confirm('Die Lizenz auf diesem Gerät wirklich abmelden? Du kannst sie danach auf einem anderen Gerät nutzen.')) {
+      return;
+    }
+    setIsDeactivatingLicense(true);
+    setLicenseError('');
     try {
-      await saveLicense({ serialNumber, expiresAt: licenseExpiry });
-      const state = getLicenseState({ serialNumber, expiresAt: licenseExpiry });
-      setLicenseMessage({
-        success: state === 'valid',
-        message:
-          state === 'valid'
-            ? 'Lizenz gespeichert.'
-            : state === 'expired'
-              ? 'Lizenz gespeichert, ist aber abgelaufen.'
-              : 'Keine Seriennummer eingegeben.',
-      });
+      await license.deactivate();
     } catch (error) {
-      setLicenseMessage({ success: false, message: `Speichern fehlgeschlagen: ${getErrorMessage(error, '')}` });
+      const message = typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : String(error);
+      setLicenseError(message);
+      setIsDeactivatingLicense(false);
     }
   };
 
@@ -576,42 +566,54 @@ export default function Settings() {
         <Divider />
 
         <div>
-          <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Lizenz</h3>
-          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-            Die Seriennummer wird derzeit nur lokal gespeichert und nicht online geprüft.
-            Der Status wird im Footer angezeigt.
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="license-serial">Seriennummer</Label>
-              <Input
-                id="license-serial"
-                autoComplete="off"
-                value={serialNumber}
-                onChange={(event) => setSerialNumber(event.target.value)}
-              />
+          <h3 className="mb-2 text-lg font-medium text-gray-800 dark:text-gray-200">Lizenz</h3>
+          <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Produkt</dt>
+              <dd className="font-medium">{license.status.product || '–'}</dd>
             </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="license-expiry">Gültig bis (leer = unbefristet)</Label>
-              <Input
-                id="license-expiry"
-                type="date"
-                value={licenseExpiry}
-                onChange={(event) => setLicenseExpiry(event.target.value)}
-              />
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">Lizenztyp</dt>
+              <dd className="font-medium">{licenseTypeLabel(license.status.kind)}</dd>
             </div>
-          </div>
-          <div className="mt-4 flex flex-col items-start gap-2">
-            <Button appearance="primary" onClick={handleSaveLicense}>Lizenz speichern</Button>
-            {licenseMessage && (
-              <p
-                role={licenseMessage.success ? 'status' : 'alert'}
-                className={licenseMessage.success ? 'text-sm text-green-700' : 'text-sm text-red-600'}
+            <div>
+              <dt className="text-gray-500 dark:text-gray-400">
+                {license.status.kind === 'trial' ? 'Testzeitraum' : 'Gültig bis'}
+              </dt>
+              <dd className="font-medium">
+                {license.status.kind === 'trial'
+                  ? `noch ${license.status.daysLeft ?? 0} ${license.status.daysLeft === 1 ? 'Tag' : 'Tage'}`
+                  : license.status.expiresAt
+                    ? new Date(license.status.expiresAt).toLocaleDateString('de-DE')
+                    : 'Unbefristet'}
+              </dd>
+            </div>
+          </dl>
+          {license.status.offline && (
+            <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+              Der Lizenzserver war nicht erreichbar. Die App läuft vorübergehend mit dem zuletzt
+              bestätigten Lizenzstatus.
+            </p>
+          )}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {license.status.kind === 'trial' ? (
+              <>
+                <Button appearance="primary" onClick={license.openShop}>Lizenz kaufen</Button>
+                <Button appearance="secondary" onClick={license.enterKey}>Lizenzschlüssel eingeben</Button>
+              </>
+            ) : (
+              <Button
+                appearance="secondary"
+                disabled={isDeactivatingLicense}
+                onClick={() => void handleDeactivateLicense()}
               >
-                {licenseMessage.message}
-              </p>
+                {isDeactivatingLicense ? 'Wird abgemeldet…' : 'Lizenz auf diesem Gerät abmelden'}
+              </Button>
             )}
           </div>
+          {licenseError && (
+            <p role="alert" className="mt-2 text-sm text-red-600">{licenseError}</p>
+          )}
         </div>
 
       </div>

@@ -1,51 +1,29 @@
 import { useTheme } from './ThemeContext';
-import { useEffect, useState } from 'react';
 import { isPostgresActive } from '../db';
-import { LICENSE_CHANGED_EVENT, getLicenseState, loadLicense, type LicenseState } from '../db/license';
+import { useLicenseStatus } from './LicenseGate';
 
 type Level = 'red' | 'yellow' | 'green';
 
 export function Footer() {
   const Year = 2026;
   const { isDarkMode } = useTheme();
-  const [licenseState, setLicenseState] = useState<LicenseState | null>(null);
+  const license = useLicenseStatus();
 
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const state = getLicenseState(await loadLicense());
-        if (!cancelled) setLicenseState(state);
-      } catch (error) {
-        console.error('Lizenz konnte nicht gelesen werden:', error);
-        if (!cancelled) setLicenseState('missing');
-      }
-    };
-    void refresh();
-    // Prüft auch bei laufender App, ob die Lizenz inzwischen abgelaufen ist
-    const timer = window.setInterval(refresh, 60 * 60 * 1000);
-    window.addEventListener(LICENSE_CHANGED_EVENT, refresh);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener(LICENSE_CHANGED_EVENT, refresh);
-    };
-  }, []);
-
-  let level: Level = 'red';
-  let text = 'Lizenz wird geprüft…';
-  if (licenseState === 'missing') {
-    text = 'Keine Seriennummer eingegeben – Aktionen erforderlich!';
-  } else if (licenseState === 'expired') {
-    text = 'Lizenz abgelaufen – Aktionen erforderlich!';
-  } else if (licenseState === 'valid') {
-    if (isPostgresActive()) {
-      level = 'green';
-      text = 'Alles in Ordnung: PostgreSQL verbunden, Lizenz gültig';
-    } else {
-      level = 'yellow';
-      text = 'Lizenz gültig, aber lokale SQLite-Datenbank aktiv';
-    }
+  let level: Level = 'green';
+  let text: string;
+  if (license.status.kind === 'trial') {
+    level = 'yellow';
+    const days = license.status.daysLeft ?? 0;
+    text = `Testversion – noch ${days} ${days === 1 ? 'Tag' : 'Tage'}`;
+  } else if (isPostgresActive()) {
+    text = 'Alles in Ordnung: PostgreSQL verbunden, Lizenz gültig';
+  } else {
+    level = 'yellow';
+    text = 'Lizenz gültig, aber lokale SQLite-Datenbank aktiv';
+  }
+  if (license.status.offline) {
+    level = 'yellow';
+    text += ' (offline, Lizenz nicht neu bestätigt)';
   }
 
   const dotClass = { red: 'bg-red-500', yellow: 'bg-yellow-500', green: 'bg-green-500' }[level];
@@ -70,6 +48,15 @@ export function Footer() {
           <span className={`relative inline-flex rounded-full h-3 w-3 ${dotClass}`}></span>
         </div>
         <span className={`font-medium ${textClass}`}>{text}</span>
+        {license.status.kind === 'trial' && (
+          <button
+            type="button"
+            onClick={license.openShop}
+            className="rounded px-2 py-0 text-xs underline shadow-none"
+          >
+            Jetzt kaufen
+          </button>
+        )}
       </div>
       <p>© {Year === new Date().getFullYear() ? Year : `${Year} - ${new Date().getFullYear()}`}  -  Billi, Der Rechnungsprofi</p>
     </footer>
